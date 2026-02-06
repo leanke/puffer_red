@@ -82,6 +82,7 @@ typedef struct {
   uint8_t x;     // read_mem(env, PKMN_X_ADDR);
   uint8_t y;     // read_mem(env, PKMN_Y_ADDR);
   uint8_t map_n; // read_mem(env, PKMN_MAP_ADDR);
+  uint32_t idx;  // coord_index(map_n, x, y);
 
   uint8_t badges; // read_mem(env, PKMN_BADGES_ADDR);
   uint32_t money; // read_bcd(env, PKMN_MONEY_ADDR);
@@ -177,19 +178,19 @@ static inline void update_observations(PokemonRedEnv *env) {
 static inline uint32_t coord_index(uint8_t map, uint8_t x, uint8_t y) {
   return ((uint32_t)map << 16) | ((uint32_t)x << 8) | (uint32_t)y;
 }
-static inline bool is_coord_visited(PokemonRedEnv *env, uint32_t idx) {
+static inline bool is_coord_visited(PokemonRedEnv *env) {
   if (!env || !env->visited_coords)
     return false;
-  if (idx >= VISITED_COORDS_SIZE)
+  if (env->gstate.ram.idx >= VISITED_COORDS_SIZE)
     return false;
-  return env->visited_coords[idx];
+  return env->visited_coords[env->gstate.ram.idx];
 }
-static inline void mark_coord_visited(PokemonRedEnv *env, uint32_t idx) {
+static inline void mark_coord_visited(PokemonRedEnv *env) {
   if (!env || !env->visited_coords)
     return;
-  if (idx >= VISITED_COORDS_SIZE)
+  if (env->gstate.ram.idx >= VISITED_COORDS_SIZE)
     return;
-  env->visited_coords[idx] = 1;
+  env->visited_coords[env->gstate.ram.idx] = 1;
 }
 static inline void clear_visited_coords(PokemonRedEnv *env) {
   if (env && env->visited_coords) {
@@ -249,6 +250,7 @@ void update_ram(PokemonRedEnv *env) {
   ram->x = read_mem(&env->emu, PKMN_X_ADDR);
   ram->y = read_mem(&env->emu, PKMN_Y_ADDR);
   ram->map_n = read_mem(&env->emu, PKMN_MAP_ADDR);
+  ram->idx = coord_index(ram->map_n, ram->x, ram->y);
   ram->badges = read_mem(&env->emu, PKMN_BADGES_ADDR);
   ram->money = read_bcd(&env->emu, PKMN_MONEY_ADDR);
   ram->party_count = read_mem(&env->emu, PKMN_PARTY_COUNT_ADDR);
@@ -284,7 +286,7 @@ static float calculate_rewards(PokemonRedEnv *env) {
   update_ram(env);
   RamState *ram = &env->gstate.ram;
   RamState *prev_ram = &env->gstate.prev_ram;
-  uint32_t idx = coord_index(ram->map_n, ram->x, ram->y);
+  
   int level_sum = calc_level_sum(ram);
   int prev_level_sum = calc_level_sum(prev_ram);
 
@@ -302,13 +304,12 @@ static float calculate_rewards(PokemonRedEnv *env) {
   //   reward += REWARD_MAP;
   // }
 
-  if (!is_coord_visited(env, idx)) {
-    mark_coord_visited(env, idx);
+  if (!is_coord_visited(env)) {
+    mark_coord_visited(env);
     env->unique_coords_count++;
     reward += REWARD_UNIQUE_COORD;
-    if (env->prev_visited_coords[idx] == 0) {
+    if (env->prev_visited_coords[env->gstate.ram.idx] == 0) {
       reward += REWARD_UNIQUE_COORD; // fake memory?
-      env->prev_visited_coords[idx] = 1;
     }
   }
 
@@ -342,8 +343,8 @@ void c_reset(PokemonRedEnv *env) {
   env->gstate.prev_ram = env->gstate.ram;
   update_observations(env);
   clear_visited_coords(env);
-  uint32_t idx = coord_index(ram->map_n, ram->x, ram->y);
-  mark_coord_visited(env, idx);
+  mark_coord_visited(env);
+  env->unique_coords_count = 1;
 
   env->rewards[0] = 0;
   env->terminals[0] = 0;
@@ -359,20 +360,21 @@ void c_reset(PokemonRedEnv *env) {
 void c_step(PokemonRedEnv *env) {
   if (!env || !env->emu.core)
     return;
-  update_battle_state(&env->gstate.battle, &env->emu);
   env->rewards[0] = 0;
   env->terminals[0] = 0;
-  if (env->gstate.battle.battle_active) {
-    env->step_count++;
-  }
+
   // batch frame stepping
   int skip = env->emu.frame_skip > 0 ? env->emu.frame_skip : 1;
   uint32_t action_key = action_to_key(env->actions[0]);
   STEP_N_FRAMES(env->emu.core, action_key, skip);
   env->frame_count += skip;
 
-  float reward = calculate_rewards(env);
+  update_battle_state(&env->gstate.battle, &env->emu);
+  if (env->gstate.battle.battle_active) {
+    env->step_count++;
+  }
 
+  float reward = calculate_rewards(env);
   update_observations(env);
   env->rewards[0] = reward;
   env->score += reward;
@@ -384,10 +386,14 @@ void c_step(PokemonRedEnv *env) {
     c_reset(env);
   }
 }
-void c_render(PokemonRedEnv *env) { (void)env; }
+void c_render(PokemonRedEnv *env) {
+  mgba_render_frame(&env->emu);
+}
 void c_close(PokemonRedEnv *env) {
   if (!env)
     return;
+
+  mgba_destroy_renderer(&env->emu);
 
   if (env->emu.core) {
     env->emu.core->setVideoBuffer(env->emu.core, NULL, 0);

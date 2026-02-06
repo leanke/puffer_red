@@ -1,6 +1,7 @@
 #ifndef MGBA_WRAPPER_H
 #define MGBA_WRAPPER_H
 
+#include <SDL2/SDL.h>
 #include <unistd.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -8,6 +9,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#ifndef SDL_WINDOW_ALLOW_HIGHDPI
+#define SDL_WINDOW_ALLOW_HIGHDPI 0
+#endif
 
 #include <mgba-util/vfs.h>
 #include <mgba/core/config.h>
@@ -26,6 +31,14 @@ typedef struct {
   int32_t frame_skip;
   bool render_enabled;
   bool uses_shared_rom;
+  SDL_Window *window;
+  SDL_Renderer *renderer;
+  SDL_Texture *texture;
+  uint32_t window_id;
+  int video_width;
+  int video_height;
+  bool renderer_initialized;
+  bool sdl_registered;
 } mGBA;
 
 #include "optim.h" // needed below mGBA struct?
@@ -118,12 +131,242 @@ static inline uint16_t read_uint16(mGBA *env, uint16_t addr) {
   return (uint16_t)(low | (high << 8));
 }
 
+typedef struct RenderRegistryNode {
+  uint32_t window_id;
+  mGBA *env;
+  struct RenderRegistryNode *next;
+} RenderRegistryNode;
+
+static RenderRegistryNode *g_render_registry = NULL;
+static int g_sdl_video_users = 0;
+
+static void mgba_destroy_renderer(mGBA *env);
+
+static bool mgba_acquire_sdl_video(void) {
+  if (g_sdl_video_users == 0) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+      fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+      return false;
+    }
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
+  }
+  g_sdl_video_users++;
+  return true;
+}
+static void mgba_release_sdl_video(void) {
+  if (g_sdl_video_users == 0)
+    return;
+  g_sdl_video_users--;
+  if (g_sdl_video_users == 0) {
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    SDL_Quit();
+  }
+}
+static void mgba_register_window(mGBA *env) {
+  if (!env || env->window_id == 0)
+    return;
+  RenderRegistryNode *node = (RenderRegistryNode *)calloc(1, sizeof(RenderRegistryNode));
+  if (!node)
+    return;
+  node->window_id = env->window_id;
+  node->env = env;
+  node->next = g_render_registry;
+  g_render_registry = node;
+}
+static void mgba_unregister_window(uint32_t window_id) {
+  RenderRegistryNode **curr = &g_render_registry;
+  while (*curr) {
+    if ((*curr)->window_id == window_id) {
+      RenderRegistryNode *victim = *curr;
+      *curr = victim->next;
+      free(victim);
+      return;
+    }
+    curr = &(*curr)->next;
+  }
+}
+static mGBA *mgba_lookup_env(uint32_t window_id) {
+  RenderRegistryNode *node = g_render_registry;
+  while (node) {
+    if (node->window_id == window_id)
+      return node->env;
+    node = node->next;
+  }
+  return NULL;
+}
+static SDL_Rect mgba_calculate_dest_rect(const mGBA *env) {
+  SDL_Rect rect = {0, 0, 0, 0};
+  if (!env || !env->window || env->video_width <= 0 || env->video_height <= 0)
+    return rect;
+
+  int window_w = 0;
+  int window_h = 0;
+  SDL_GetWindowSize(env->window, &window_w, &window_h);
+  if (window_w <= 0 || window_h <= 0) {
+    rect.w = env->video_width;
+    rect.h = env->video_height;
+    return rect;
+  }
+
+  int scaled_w = window_w;
+  int scaled_h = (env->video_height * scaled_w) / (env->video_width ? env->video_width : 1);
+  if (scaled_h > window_h) {
+    scaled_h = window_h;
+    scaled_w = (env->video_width * scaled_h) / (env->video_height ? env->video_height : 1);
+  }
+
+  if (scaled_w <= 0)
+    scaled_w = env->video_width;
+  if (scaled_h <= 0)
+    scaled_h = env->video_height;
+
+  rect.w = scaled_w;
+  rect.h = scaled_h;
+  rect.x = (window_w - rect.w) / 2;
+  rect.y = (window_h - rect.h) / 2;
+  return rect;
+}
+static bool mgba_ensure_renderer(mGBA *env) {
+  if (!env || !env->render_enabled)
+    return false;
+  if (env->renderer_initialized && env->window && env->renderer && env->texture)
+    return true;
+
+  if (!mgba_acquire_sdl_video())
+    return false;
+  env->sdl_registered = true;
+
+  int width = env->video_width > 0 ? env->video_width : 160;
+  int height = env->video_height > 0 ? env->video_height : 144;
+  env->window = SDL_CreateWindow(env->rom_path[0] ? env->rom_path : "Pokemon Red",
+                                 SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                                 width * 3, height * 3,
+                                 SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+  if (!env->window) {
+    fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+    mgba_destroy_renderer(env);
+    return false;
+  }
+
+  env->renderer = SDL_CreateRenderer(env->window, -1,
+                                     SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
+  if (!env->renderer) {
+    env->renderer = SDL_CreateRenderer(env->window, -1, SDL_RENDERER_SOFTWARE);
+  }
+  if (!env->renderer) {
+    fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
+    mgba_destroy_renderer(env);
+    return false;
+  }
+
+  env->texture = SDL_CreateTexture(env->renderer, SDL_PIXELFORMAT_ARGB8888,
+                                   SDL_TEXTUREACCESS_STREAMING, width, height);
+  if (!env->texture) {
+    fprintf(stderr, "SDL_CreateTexture failed: %s\n", SDL_GetError());
+    mgba_destroy_renderer(env);
+    return false;
+  }
+
+  env->video_width = width;
+  env->video_height = height;
+  env->window_id = SDL_GetWindowID(env->window);
+  mgba_register_window(env);
+  env->renderer_initialized = true;
+  SDL_ShowWindow(env->window);
+  return true;
+}
+static void mgba_destroy_renderer(mGBA *env) {
+  if (!env)
+    return;
+
+  if (env->texture) {
+    SDL_DestroyTexture(env->texture);
+    env->texture = NULL;
+  }
+  if (env->renderer) {
+    SDL_DestroyRenderer(env->renderer);
+    env->renderer = NULL;
+  }
+  if (env->window) {
+    SDL_DestroyWindow(env->window);
+    env->window = NULL;
+  }
+
+  if (env->window_id) {
+    mgba_unregister_window(env->window_id);
+    env->window_id = 0;
+  }
+
+  if (env->sdl_registered) {
+    mgba_release_sdl_video();
+    env->sdl_registered = false;
+  }
+
+  env->renderer_initialized = false;
+}
+static void mgba_dispatch_events(void) {
+  SDL_Event event;
+  while (SDL_PollEvent(&event)) {
+    if (event.type == SDL_QUIT) {
+      while (g_render_registry) {
+        mGBA *target = g_render_registry->env;
+        if (target) {
+          target->render_enabled = false;
+          mgba_destroy_renderer(target);
+        } else {
+          RenderRegistryNode *orphan = g_render_registry;
+          g_render_registry = orphan->next;
+          free(orphan);
+        }
+      }
+      break;
+    }
+
+    if (event.type == SDL_WINDOWEVENT) {
+      mGBA *target = mgba_lookup_env(event.window.windowID);
+      if (!target)
+        continue;
+      if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
+        fprintf(stderr, "Rendering disabled after window close (env %p). Recreate the environment to re-enable.\n",
+                (void *)target);
+        target->render_enabled = false;
+        mgba_destroy_renderer(target);
+      }
+    }
+  }
+}
+static void mgba_render_frame(mGBA *env) {
+  if (!env || !env->render_enabled || !env->video_buffer)
+    return;
+
+  mgba_dispatch_events();
+  if (!mgba_ensure_renderer(env))
+    return;
+
+  const int pitch = env->video_width * (int)sizeof(color_t);
+  if (SDL_UpdateTexture(env->texture, NULL, env->video_buffer, pitch) != 0) {
+    fprintf(stderr, "SDL_UpdateTexture failed: %s\n", SDL_GetError());
+    return;
+  }
+
+  SDL_SetRenderDrawColor(env->renderer, 0, 0, 0, 255);
+  SDL_RenderClear(env->renderer);
+  SDL_Rect dest = mgba_calculate_dest_rect(env);
+  SDL_RenderCopy(env->renderer, env->texture, NULL, dest.w > 0 && dest.h > 0 ? &dest : NULL);
+  SDL_RenderPresent(env->renderer);
+}
 
 void mgba_init_core(mGBA *env, const char *rom_path) {
   if (!env)
     return;
 
   env->uses_shared_rom = false;
+  env->window = NULL;
+  env->renderer = NULL;
+  env->texture = NULL;
+  env->window_id = 0;
+  env->renderer_initialized = false;
+  env->sdl_registered = false;
 
   mLogSetDefaultLogger(&s_silentLogger);
   env->core = mCoreFind(rom_path);
@@ -148,6 +391,8 @@ void mgba_init_core(mGBA *env, const char *rom_path) {
   if (env->video_buffer) {
     env->core->setVideoBuffer(env->core, env->video_buffer, w);
   }
+  env->video_width = (int)w;
+  env->video_height = (int)h;
   
   configure_headless_mode(env->core);
   

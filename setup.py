@@ -8,6 +8,7 @@ import os
 import glob
 import platform
 import shutil
+import subprocess
 
 from setuptools.command.build_ext import build_ext
 from torch.utils import cpp_extension
@@ -144,10 +145,21 @@ for c_ext in c_extensions:
         c_ext.include_dirs.append('/usr/include/mgba')
         c_ext.include_dirs.append('pokered/includes')
         c_ext.extra_compile_args.append('-DENABLE_VFS')
-        # Link against mGBA library - use default -lmgba 
-        # Note: System has version mismatch (headers=0.10, lib=0.11)
-        # If this fails at runtime, fix by reinstalling libmgba0.10t64
+        # Link against mGBA/SDL2 - use pkg-config for SDL flags when available
+        try:
+            sdl_cflags = subprocess.check_output([
+                'pkg-config', '--cflags', 'sdl2'
+            ], text=True).strip().split()
+            sdl_libs = subprocess.check_output([
+                'pkg-config', '--libs', 'sdl2'
+            ], text=True).strip().split()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            sdl_cflags = ['-I/usr/include/SDL2', '-D_REENTRANT']
+            sdl_libs = ['-lSDL2']
+
+        c_ext.extra_compile_args.extend(flag for flag in sdl_cflags if flag)
         c_ext.extra_link_args.extend(['-lmgba'])
+        c_ext.extra_link_args.extend(flag for flag in sdl_libs if flag)
 
 
 

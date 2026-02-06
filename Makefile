@@ -1,7 +1,12 @@
 SHELL := /bin/bash
 PYTHON := python3
+CC ?= gcc
 NUMPY_INCLUDE := $(shell $(PYTHON) -c "import numpy; print(numpy.get_include())")
 POKERED_DIR := pokered
+POKERED_PLAY_BIN := pokered_play
+POKERED_PLAY_SRC := $(POKERED_DIR)/pokered.c
+SDL2_CFLAGS := $(shell pkg-config --cflags sdl2 2>/dev/null || sdl2-config --cflags 2>/dev/null)
+SDL2_LIBS := $(shell pkg-config --libs sdl2 2>/dev/null || sdl2-config --libs 2>/dev/null || echo -lSDL2)
 
 DEBUG ?= 0
 PROFILE ?= 0
@@ -22,11 +27,13 @@ endif
 CFLAGS := -DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION -DPLATFORM_DESKTOP -I$(NUMPY_INCLUDE) -Wno-alloc-size-larger-than -Wno-implicit-function-declaration -fmax-errors=3 $(OPT_FLAGS) -DENABLE_VFS
 LDFLAGS := -fwrapv -Bsymbolic-functions $(LINK_OPT_FLAGS) -lmgba
 
-.PHONY: all clean help pokered
+.PHONY: all clean help pokered pokered_play
 
 all: pokered
 
 pokered: $(POKERED_DIR)/binding.so
+
+play: $(POKERED_PLAY_BIN)
 
 
 $(POKERED_DIR)/binding.so: $(POKERED_DIR)/binding.c 
@@ -38,10 +45,15 @@ $(POKERED_DIR)/binding.so: $(POKERED_DIR)/binding.c
 	    extra_compile_args='$(CFLAGS)'.split(), \
 	    extra_link_args='$(LDFLAGS)'.split())])" build_ext --inplace
 
+$(POKERED_PLAY_BIN): $(POKERED_PLAY_SRC)
+	@echo "Compiling standalone Pokemon Red player..."
+	$(CC) $(CFLAGS) $(SDL2_CFLAGS) -I$(POKERED_DIR) -I$(POKERED_DIR)/includes $< -o $@ $(LDFLAGS) $(SDL2_LIBS)
+
 clean:
 	@echo "Cleaning..."
 	@find $(POKERED_DIR) -name "*.so" -delete
 	@find $(POKERED_DIR) -name "build" -type d -exec rm -rf {} + 2>/dev/null || true
+	@rm -f $(POKERED_PLAY_BIN)
 
 install-deps:
 	@echo "Installing mGBA development libraries..."
@@ -53,6 +65,7 @@ help:
 	@echo "Usage:"
 	@echo "  make                 - Build pokered binding (release, optimized)"
 	@echo "  make clean           - Clean environment"
+	@echo "  make pokered_play    - Build standalone SDL player"
 	@echo "  make install-deps    - Install mGBA development libraries"
 	@echo "  make test            - Run quick test"
 	@echo "  make bench           - Run benchmark"

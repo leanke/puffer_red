@@ -61,7 +61,6 @@ class PokemonRed(pufferlib.PufferEnv):
             self.terminals, self.truncations, num_envs, seed, 
             headless=headless, rom_path=rom_path, state_path=state_path,
             frameskip=frameskip, max_episode_length=max_episode_length, full_reset=full_reset
-
         )
         
         self.stream_enabled = stream_enabled
