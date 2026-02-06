@@ -1,5 +1,5 @@
 #include "pokered.h"
-#include "includes/mgba_wrapper.h"
+#include "./includes/mgba_wrapper.h"
 #include <Python.h>
 
 #define Env PokemonRedEnv
@@ -26,7 +26,8 @@ static PyObject *vec_get_positions(PyObject *self, PyObject *args) {
   PyObject *list = PyList_New(vec->num_envs);
   for (int i = 0; i < vec->num_envs; i++) {
     Env *env = vec->envs[i];
-    PyObject *pos = Py_BuildValue("(iii)", env-> ram.x, env->ram.y, env->ram.map_n);
+    
+    PyObject *pos = Py_BuildValue("(iii)", env->gstate.ram.x, env->gstate.ram.y, env->gstate.ram.map_n);
     PyList_SetItem(list, i, pos);
   }
   return list;
@@ -35,7 +36,6 @@ static PyObject *vec_get_positions(PyObject *self, PyObject *args) {
 static int my_init(Env *env, PyObject *args, PyObject *kwargs) {
   const char *rom_path = NULL;
   g_env_init_counter++;
-  
   env->emu.frame_skip = unpack(kwargs, "frameskip");
   env->max_episode_length = unpack(kwargs, "max_episode_length");
   env->emu.render_enabled = !unpack(kwargs, "headless");
@@ -55,7 +55,6 @@ static int my_init(Env *env, PyObject *args, PyObject *kwargs) {
     PyErr_SetString(PyExc_ValueError, "rom_path is required");
     return -1;
   }
-  
   strncpy(env->emu.rom_path, rom_path, sizeof(env->emu.rom_path) - 1);
   FILE *rom_file = fopen(rom_path, "rb");
   if (!rom_file) {
@@ -64,7 +63,8 @@ static int my_init(Env *env, PyObject *args, PyObject *kwargs) {
   }
   fclose(rom_file);
 
-  mgba_init_rl_env(&env->emu, rom_path);
+
+  mgba_init_core(&env->emu, rom_path);
   env->visited_coords = (uint8_t *)calloc(VISITED_COORDS_SIZE, sizeof(uint8_t));
   env->prev_visited_coords = (uint8_t *)calloc(VISITED_COORDS_SIZE, sizeof(uint8_t));
   memset(env->prev_visited_coords, 1, VISITED_COORDS_SIZE);

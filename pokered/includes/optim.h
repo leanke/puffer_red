@@ -1,14 +1,10 @@
 // mgba_optim.h - Optimization macros for mGBA RL environment
 // opus got me scared here :(
-#ifndef MGBA_OPTIM_H
-#define MGBA_OPTIM_H
+#ifndef OPTIM_H
+#define OPTIM_H
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdlib.h>
-
-// Forward declaration for mCore (actual definition comes from mgba headers)
-struct mCore;
 
 // Branch prediction hints
 #ifndef LIKELY
@@ -82,15 +78,12 @@ static inline void* get_shared_rom(void) { return NULL; }
 static inline size_t get_shared_rom_size(void) { return 0; }
 
 // Configure core for headless RL mode (disables audio)
-// Note: Requires mgba_wrapper.h to be included first for mCoreConfigSetValue
-#ifdef MGBA_WRAPPER_H
 static inline void configure_headless_mode(struct mCore* core) {
     if (UNLIKELY(!core)) return;
     core->setAudioBufferSize(core, 0);
     mCoreConfigSetValue(&core->config, "audio.quality", "0");
     mCoreConfigSetValue(&core->config, "audio.volume", "0");
 }
-#endif
 
 // Memory alignment
 #define CACHE_LINE_SIZE 64
@@ -156,4 +149,4 @@ static inline void aligned_free(void* ptr) {
   #define PERF_INC_STEP()         ((void)0)
 #endif
 
-#endif // MGBA_OPTIM_H
+#endif // OPTIM_H
