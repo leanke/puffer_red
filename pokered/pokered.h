@@ -4,6 +4,8 @@
 #include "./includes/battle.h"
 #include "./includes/events.h"
 #include "./includes/mgba_wrapper.h"
+#include "./includes/party.h"
+
 #define SCREEN_WIDTH 160
 #define SCALED_WIDTH 80
 #define SCALED_HEIGHT 72
@@ -36,7 +38,7 @@
 #define REWARD_BADGE 5.0f   // 1.0f
 #define REWARD_POKEMON 1.0f // 0.f
 // #define REWARD_MAP 0.001f    // 0.2f
-#define REWARD_UNIQUE_COORD 0.0025f
+#define REWARD_UNIQUE_COORD 0.01f // 0.5f
 #define REWARD_LEVEL 0.5f
 #define REWARD_EVENT 0.1f
 // #define STAGNATION_LIMIT 1000
@@ -102,6 +104,7 @@ typedef struct {
   RamState prev_ram;
   BattleState battle;
   BattleState prev_battle;
+  // PartyPokemon party[6];
 } GameState;
 
 typedef struct {
@@ -286,7 +289,7 @@ static float calculate_rewards(PokemonRedEnv *env) {
   update_ram(env);
   RamState *ram = &env->gstate.ram;
   RamState *prev_ram = &env->gstate.prev_ram;
-  
+
   int level_sum = calc_level_sum(ram);
   int prev_level_sum = calc_level_sum(prev_ram);
 
@@ -362,17 +365,17 @@ void c_step(PokemonRedEnv *env) {
     return;
   env->rewards[0] = 0;
   env->terminals[0] = 0;
-
+  env->step_count++;
   // batch frame stepping
   int skip = env->emu.frame_skip > 0 ? env->emu.frame_skip : 1;
   uint32_t action_key = action_to_key(env->actions[0]);
   STEP_N_FRAMES(env->emu.core, action_key, skip);
   env->frame_count += skip;
 
-  update_battle_state(&env->gstate.battle, &env->emu);
-  if (env->gstate.battle.battle_active) {
-    env->step_count++;
-  }
+  //  update_battle_state(&env->gstate.battle, &env->emu);
+  //  if (env->gstate.battle.battle_active) {
+  //    env->step_count++;
+  //  }
 
   float reward = calculate_rewards(env);
   update_observations(env);
@@ -386,9 +389,7 @@ void c_step(PokemonRedEnv *env) {
     c_reset(env);
   }
 }
-void c_render(PokemonRedEnv *env) {
-  mgba_render_frame(&env->emu);
-}
+void c_render(PokemonRedEnv *env) { mgba_render_frame(&env->emu); }
 void c_close(PokemonRedEnv *env) {
   if (!env)
     return;
