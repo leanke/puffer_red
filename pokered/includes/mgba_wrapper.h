@@ -131,6 +131,23 @@ static inline uint16_t read_uint16(mGBA *env, uint16_t addr) {
   return (uint16_t)(low | (high << 8));
 }
 
+static inline void write_mem(mGBA *env, uint16_t addr, uint8_t value) {
+  if (env && env->core)
+    env->core->rawWrite8(env->core, addr, -1, value);
+}
+static inline void write_bcd(mGBA *env, uint16_t addr, uint32_t value) {
+  uint8_t h = ((value / 100000) << 4) | ((value / 10000) % 10);
+  uint8_t m = (((value / 1000) % 10) << 4) | ((value / 100) % 10);
+  uint8_t l = (((value / 10) % 10) << 4) | (value % 10);
+  write_mem(env, addr, h);
+  write_mem(env, addr + 1, m);
+  write_mem(env, addr + 2, l);
+}
+static inline void write_uint16(mGBA *env, uint16_t addr, uint16_t value) {
+  write_mem(env, addr, (uint8_t)(value & 0xFF));
+  write_mem(env, addr + 1, (uint8_t)(value >> 8));
+}
+
 typedef struct RenderRegistryNode {
   uint32_t window_id;
   mGBA *env;

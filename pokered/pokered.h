@@ -38,7 +38,7 @@
 #define REWARD_BADGE 5.0f   // 1.0f
 #define REWARD_POKEMON 1.0f // 0.f
 // #define REWARD_MAP 0.001f    // 0.2f
-#define REWARD_UNIQUE_COORD 0.01f // 0.5f
+#define REWARD_UNIQUE_COORD 0.005f // 0.5f
 #define REWARD_LEVEL 0.5f
 #define REWARD_EVENT 0.1f
 // #define STAGNATION_LIMIT 1000
@@ -127,6 +127,7 @@ typedef struct {
   uint8_t *prev_visited_coords;
   uint32_t unique_coords_count;
   int32_t prev_event_sum;
+  uint8_t *prev_events;
   bool full_reset;
 } PokemonRedEnv;
 
@@ -207,6 +208,7 @@ void allocate(PokemonRedEnv *env) {
   env->rewards = (float *)calloc(1, sizeof(float));
   env->terminals = (unsigned char *)calloc(1, sizeof(unsigned char));
   env->truncations = (unsigned char *)calloc(1, sizeof(unsigned char));
+
 }
 void free_allocated(PokemonRedEnv *env) {
   free(env->observations);
@@ -216,6 +218,7 @@ void free_allocated(PokemonRedEnv *env) {
   free(env->truncations);
   free(env->visited_coords);
   free(env->prev_visited_coords);
+  free(env->prev_events);
 }
 void add_log(PokemonRedEnv *env) {
   RamState *ram = &env->gstate.ram;
@@ -274,11 +277,20 @@ int calc_level_sum(RamState *ram) {
   level_sum += ram->pkmn6_lvl;
   return level_sum;
 }
-int calc_event_sum(mGBA *emu) {
+int calc_event_sum(mGBA *emu, uint8_t *prev_events) {
   int sum = 0;
   for (size_t i = 0; i < EVENT_COUNT; ++i) {
     uint8_t value = read_mem(emu, EVENT_LIST[i].address);
-    sum += (value >> EVENT_LIST[i].bit) & 1;
+    uint8_t completed = (value >> EVENT_LIST[i].bit) & 1;
+    if (completed) {
+      if (prev_events && !prev_events[i]) {
+        printf("Event completed: %s\n", EVENT_LIST[i].name);
+      }
+      sum++;
+    }
+    if (prev_events) {
+      prev_events[i] = completed;
+    }
   }
   return sum;
 }
@@ -316,17 +328,17 @@ static float calculate_rewards(PokemonRedEnv *env) {
     }
   }
 
-  if (level_sum > prev_level_sum && ram->party_count >= prev_ram->party_count) {
+  if (level_sum > prev_level_sum && ram->party_count == prev_ram->party_count) {
     // int level_diff = level_sum - prev_level_sum;
     reward += REWARD_LEVEL;
     printf("You have leveled up! New level sum: %d\n", level_sum);
   }
 
   // Event reward delta
-  int event_sum = calc_event_sum(&env->emu);
+  int event_sum = calc_event_sum(&env->emu, env->prev_events);
   if (event_sum > env->prev_event_sum) {
     reward += (event_sum - env->prev_event_sum) * REWARD_EVENT;
-    printf("You have completed an event! New event sum: %d\n", event_sum);
+    // printf("You have completed an event! New event sum: %d\n", event_sum);
   }
 
   env->prev_event_sum = event_sum;
@@ -355,7 +367,12 @@ void c_reset(PokemonRedEnv *env) {
   env->score = 0.0f;
   env->stagnation = 0;
   env->unique_coords_count = 1;
-  env->prev_event_sum = calc_event_sum(&env->emu);
+  env->prev_event_sum = calc_event_sum(&env->emu, NULL);
+  // Initialize prev_events to current state without printing
+  for (size_t i = 0; i < EVENT_COUNT; ++i) {
+    uint8_t value = read_mem(&env->emu, EVENT_LIST[i].address);
+    env->prev_events[i] = (value >> EVENT_LIST[i].bit) & 1;
+  }
 
   for (int i = 0; i < 4; i++)
     env->emu.core->runFrame(env->emu.core);

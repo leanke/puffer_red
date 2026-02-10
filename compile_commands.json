@@ -1,0 +1,43 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-fno-strict-overflow",
+      "-Wsign-compare",
+      "-DNDEBUG",
+      "-g",
+      "-O3",
+      "-Wall",
+      "-fPIC",
+      "-I/home/leanke/.pyenv/versions/pokered/lib/python3.12/site-packages/numpy/core/include",
+      "-Iinclude",
+      "-I-DENABLE_VFS",
+      "-I/home/leanke/.pyenv/versions/pokered/include",
+      "-I/home/leanke/.pyenv/versions/3.12.7/include/python3.12",
+      "-c",
+      "-DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION",
+      "-DPLATFORM_DESKTOP",
+      "-I/home/leanke/.pyenv/versions/pokered/lib/python3.12/site-packages/numpy/core/include",
+      "-Wno-alloc-size-larger-than",
+      "-Wno-implicit-function-declaration",
+      "-fmax-errors=3",
+      "-O3",
+      "-flto",
+      "-march=native",
+      "-mtune=native",
+      "-mavx2",
+      "-mfma",
+      "-ffast-math",
+      "-DNDEBUG",
+      "-fomit-frame-pointer",
+      "-funroll-loops",
+      "-DENABLE_VFS",
+      "-o",
+      "build/temp.linux-x86_64-cpython-312/binding.o",
+      "binding.c"
+    ],
+    "directory": "/data/loft/puffer/puffer_red/pokered",
+    "file": "/data/loft/puffer/puffer_red/pokered/binding.c",
+    "output": "/data/loft/puffer/puffer_red/pokered/build/temp.linux-x86_64-cpython-312/binding.o"
+  }
+]

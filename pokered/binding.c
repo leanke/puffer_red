@@ -1,5 +1,5 @@
-#include "pokered.h"
 #include "./includes/mgba_wrapper.h"
+#include "pokered.h"
 #include <Python.h>
 
 #define Env PokemonRedEnv
@@ -26,8 +26,9 @@ static PyObject *vec_get_positions(PyObject *self, PyObject *args) {
   PyObject *list = PyList_New(vec->num_envs);
   for (int i = 0; i < vec->num_envs; i++) {
     Env *env = vec->envs[i];
-    
-    PyObject *pos = Py_BuildValue("(iii)", env->gstate.ram.x, env->gstate.ram.y, env->gstate.ram.map_n);
+
+    PyObject *pos = Py_BuildValue("(iii)", env->gstate.ram.x, env->gstate.ram.y,
+                                  env->gstate.ram.map_n);
     PyList_SetItem(list, i, pos);
   }
   return list;
@@ -63,13 +64,16 @@ static int my_init(Env *env, PyObject *args, PyObject *kwargs) {
   }
   fclose(rom_file);
 
-
   mgba_init_core(&env->emu, rom_path);
   env->visited_coords = (uint8_t *)calloc(VISITED_COORDS_SIZE, sizeof(uint8_t));
-  env->prev_visited_coords = (uint8_t *)calloc(VISITED_COORDS_SIZE, sizeof(uint8_t));
+  env->prev_visited_coords =
+      (uint8_t *)calloc(VISITED_COORDS_SIZE, sizeof(uint8_t));
   memset(env->prev_visited_coords, 1, VISITED_COORDS_SIZE);
   env->unique_coords_count = 0;
-
+  env->prev_events = (uint8_t *)calloc(EVENT_COUNT, sizeof(uint8_t));
+  memset(env->prev_events, 0, EVENT_COUNT);
+  printf("Initialized environment #%d with ROM: %s\n", g_env_init_counter,
+         rom_path);
   if (!env->emu.core) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to initialize mGBA core");
     return -1;
