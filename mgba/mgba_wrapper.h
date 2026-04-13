@@ -2,7 +2,7 @@
 #define MGBA_WRAPPER_H
 
 #include <SDL2/SDL.h>
-#include <unistd.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -41,38 +41,57 @@ typedef struct {
   bool sdl_registered;
 } mGBA;
 
-#include "optim.h" // needed below mGBA struct?
+#include "optim.h"
 
 typedef enum {
-  GB_KEY_A = (1 << 0),      // 0x01
-  GB_KEY_B = (1 << 1),      // 0x02
-  GB_KEY_SELECT = (1 << 2), // 0x04
-  GB_KEY_START = (1 << 3),  // 0x08
-  GB_KEY_RIGHT = (1 << 4),  // 0x10
-  GB_KEY_LEFT = (1 << 5),   // 0x20
-  GB_KEY_UP = (1 << 6),     // 0x40
-  GB_KEY_DOWN = (1 << 7),   // 0x80
-} GBKey;
+  MGBA_KEY_A = (1 << 0),
+  MGBA_KEY_B = (1 << 1),
+  MGBA_KEY_SELECT = (1 << 2),
+  MGBA_KEY_START = (1 << 3),
+  MGBA_KEY_RIGHT = (1 << 4),
+  MGBA_KEY_LEFT = (1 << 5),
+  MGBA_KEY_UP = (1 << 6),
+  MGBA_KEY_DOWN = (1 << 7),
+} MGBAKey;
 
 typedef enum {
-  GB_ACTION_NOOP = 0,
-  GB_ACTION_A,
-  GB_ACTION_B,
-  GB_ACTION_SELECT,
-  GB_ACTION_START,
-  GB_ACTION_RIGHT,
-  GB_ACTION_LEFT,
-  GB_ACTION_UP,
-  GB_ACTION_DOWN,
-  GB_ACTION_COUNT
-} GBAction;
+  MGBA_ACTION_NOOP = 0,
+  MGBA_ACTION_A,
+  MGBA_ACTION_B,
+  MGBA_ACTION_SELECT,
+  MGBA_ACTION_START,
+  MGBA_ACTION_RIGHT,
+  MGBA_ACTION_LEFT,
+  MGBA_ACTION_UP,
+  MGBA_ACTION_DOWN,
+  MGBA_ACTION_COUNT
+} MGBAAction;
 
+// GB_* aliases for game module compatibility
+#define GB_KEY_A       MGBA_KEY_A
+#define GB_KEY_B       MGBA_KEY_B
+#define GB_KEY_SELECT  MGBA_KEY_SELECT
+#define GB_KEY_START   MGBA_KEY_START
+#define GB_KEY_RIGHT   MGBA_KEY_RIGHT
+#define GB_KEY_LEFT    MGBA_KEY_LEFT
+#define GB_KEY_UP      MGBA_KEY_UP
+#define GB_KEY_DOWN    MGBA_KEY_DOWN
 
+#define GB_ACTION_NOOP    MGBA_ACTION_NOOP
+#define GB_ACTION_A       MGBA_ACTION_A
+#define GB_ACTION_B       MGBA_ACTION_B
+#define GB_ACTION_SELECT  MGBA_ACTION_SELECT
+#define GB_ACTION_START   MGBA_ACTION_START
+#define GB_ACTION_RIGHT   MGBA_ACTION_RIGHT
+#define GB_ACTION_LEFT    MGBA_ACTION_LEFT
+#define GB_ACTION_UP      MGBA_ACTION_UP
+#define GB_ACTION_DOWN    MGBA_ACTION_DOWN
+#define GB_ACTION_COUNT   MGBA_ACTION_COUNT
 
-void mgba_init_core(mGBA *env, const char *rom_path);
-void initial_load_state(mGBA *env, const char *state_path);
-bool c_save_state_file(mGBA *env, const char *path);
-bool c_load_state_file(mGBA *env, const char *path);
+static void mgba_init_core(mGBA *env, const char *rom_path);
+static void initial_load_state(mGBA *env, const char *state_path);
+static bool c_save_state_file(mGBA *env, const char *path);
+static bool c_load_state_file(mGBA *env, const char *path);
 
 static void silent_log(struct mLogger *logger, int category, enum mLogLevel level, const char *format, va_list args) {
   (void)logger;
@@ -106,7 +125,7 @@ static inline void restore_stderr(void) {
 }
 
 static inline uint32_t action_to_key(int action) {
-  if (action <= 0 || action >= GB_ACTION_COUNT)
+  if (action <= 0 || action >= MGBA_ACTION_COUNT)
     return 0;
   return (1 << (action - 1));
 }
@@ -255,7 +274,7 @@ static bool mgba_ensure_renderer(mGBA *env) {
 
   int width = env->video_width > 0 ? env->video_width : 160;
   int height = env->video_height > 0 ? env->video_height : 144;
-  env->window = SDL_CreateWindow(env->rom_path[0] ? env->rom_path : "Pokemon Red",
+  env->window = SDL_CreateWindow(env->rom_path[0] ? env->rom_path : "mGBA",
                                  SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                  width * 3, height * 3,
                                  SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
@@ -373,7 +392,7 @@ static void mgba_render_frame(mGBA *env) {
   SDL_RenderPresent(env->renderer);
 }
 
-void mgba_init_core(mGBA *env, const char *rom_path) {
+static void mgba_init_core(mGBA *env, const char *rom_path) {
   if (!env)
     return;
 
@@ -416,7 +435,7 @@ void mgba_init_core(mGBA *env, const char *rom_path) {
   env->core->reset(env->core);
   strncpy(env->rom_path, rom_path, sizeof(env->rom_path) - 1);
 }
-bool c_save_state_file(mGBA *env, const char *path) {
+static bool c_save_state_file(mGBA *env, const char *path) {
   if (!env || !env->core || !path)
     return false;
   struct VFile *vf = VFileOpen(path, O_WRONLY | O_CREAT | O_TRUNC);
@@ -426,19 +445,19 @@ bool c_save_state_file(mGBA *env, const char *path) {
   vf->close(vf);
   return result;
 }
-bool c_load_state_file(mGBA *env, const char *path) {
+static bool c_load_state_file(mGBA *env, const char *path) {
   if (!env || !env->core || !path)
     return false;
   struct VFile *vf = VFileOpen(path, O_RDONLY);
   if (!vf)
     return false;
-  suppress_stderr();  // Silence libpng warnings
+  suppress_stderr();
   bool result = mCoreLoadStateNamed(env->core, vf, SAVESTATE_ALL);
   restore_stderr();
   vf->close(vf);
   return result;
 }
-void initial_load_state(mGBA *env, const char *state_path) {
+static void initial_load_state(mGBA *env, const char *state_path) {
   struct VFile *vf = VFileOpen(state_path, O_RDONLY);
   if (vf) {
     suppress_stderr();

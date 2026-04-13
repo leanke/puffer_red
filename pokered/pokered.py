@@ -1,13 +1,10 @@
 import numpy as np
-import threading
 import json
 import multiprocessing
 from gymnasium import spaces
 import pufferlib
 from pokered import binding
 import uuid
-
-from pufferlib.pufferlib import ENV_ERROR
 
 
 STREAM_COLOR_BLUE = "#0000FF"
@@ -28,7 +25,7 @@ class PokemonRed(pufferlib.PufferEnv):
     def __init__(self, num_envs=1, render_mode=None, headless=False, rom_path=None, state_path=None,
                  frameskip=4, max_episode_length=20480, continuous=False, log_interval=128,
                  stream_enabled=False, stream_user=None, stream_color=None, stream_extra=None, full_reset=True,
-                 stream_interval=500, buf=None, seed=0):
+                 stream_interval=500, heatmap_decay=0.0, disable_wild_until_badge=False, buf=None, seed=0):
         with PokemonRed.counter_lock:
             env_id = PokemonRed.counter.value
             PokemonRed.counter.value += 1
@@ -49,7 +46,7 @@ class PokemonRed(pufferlib.PufferEnv):
         self.scaled_height = 72
         self.single_observation_space = spaces.Box(
             low=0, high=255,
-            shape=(self.scaled_height * self.scaled_width + 5,),  # 80*72 + 5 = 5765
+            shape=(self.scaled_height * self.scaled_width + 122,),  # 80*72 + 32 scalars + 90 heatmap = 5882
             dtype=np.float32
         )
         self.single_action_space = spaces.Discrete(9)
@@ -60,12 +57,13 @@ class PokemonRed(pufferlib.PufferEnv):
             self.observations, self.actions, self.rewards,
             self.terminals, self.truncations, num_envs, seed, 
             headless=headless, rom_path=rom_path, state_path=state_path,
-            frameskip=frameskip, max_episode_length=max_episode_length, full_reset=full_reset
+            frameskip=frameskip, max_episode_length=max_episode_length, full_reset=full_reset,
+            heatmap_decay=float(heatmap_decay), disable_wild_until_badge=int(disable_wild_until_badge)
         )
         
         self.stream_enabled = stream_enabled
-        self.stream_user = stream_user[0] or "User"
-        self.stream_color = stream_color[0] or STREAM_COLOR_PURPLE
+        self.stream_user = stream_user or "User"
+        self.stream_color = stream_color or STREAM_COLOR_PURPLE
         self.stream_extra = str(stream_extra)
         self.stream_interval = int(stream_interval)
         self.coords = [[] for _ in range(num_envs)]
@@ -80,7 +78,6 @@ class PokemonRed(pufferlib.PufferEnv):
             import websockets.sync.client as ws_client
             self._ws_client = ws_client
             self._ws = ws_client.connect(WS_URL, close_timeout=5)
-            # print(f"Connected to {WS_URL}")
         except Exception as e:
             print(f"Stream connection failed: {e}")
             self._ws = None
@@ -94,47 +91,40 @@ class PokemonRed(pufferlib.PufferEnv):
             self._ws = None
         try:
             self._ws = self._ws_client.connect(WS_URL, close_timeout=5)
-            # print(f"Reconnected to {WS_URL}")
             return True
         except Exception as e:
             print(f"Stream reconnection failed: {e}")
             return False
     
+    def _build_messages(self):
+        messages = []
+        for i, coord_list in enumerate(self.coords):
+            if coord_list:
+                messages.append(json.dumps({
+                    "metadata": {
+                        "user": self.stream_user + "\n",
+                        "color": self.stream_color,
+                        "extra": self.stream_extra + "\n",
+                        "env_id": f"{run_id}:{self.env_id}:{i+1}\n"
+                    },
+                    "coords": coord_list
+                }))
+        return messages
+
     def _broadcast(self):
         if not self._ws:
             if self.stream_enabled:
                 self._reconnect_stream()
             return
         try:
-            for i, coord_list in enumerate(self.coords):
-                if coord_list: 
-                    msg = json.dumps({
-                        "metadata": {
-                            "user": self.stream_user + "\n",
-                            "color": self.stream_color,
-                            "extra": self.stream_extra + "\n", # self.stream_extra,
-                            "env_id": f"{run_id}:{self.env_id}:{i+1}\n"
-                        },
-                        "coords": coord_list
-                    })
-                    self._ws.send(msg)
+            for msg in self._build_messages():
+                self._ws.send(msg)
             self.coords = [[] for _ in range(self.num_agents)]
-        except Exception as e:
-            # print(f"Stream error: {e}, attempting reconnect...")
+        except Exception:
             if self._reconnect_stream():
                 try:
-                    for i, coord_list in enumerate(self.coords):
-                        if coord_list:
-                            msg = json.dumps({
-                                "metadata": {
-                                    "user": self.stream_user + "\n",
-                                    "color": self.stream_color,
-                                    "extra": self.stream_extra + "\n",
-                                    "env_id": f"{run_id}:{self.env_id}:{i+1}\n"
-                                },
-                                "coords": coord_list
-                            })
-                            self._ws.send(msg)
+                    for msg in self._build_messages():
+                        self._ws.send(msg)
                     self.coords = [[] for _ in range(self.num_agents)]
                 except Exception as retry_e:
                     print(f"Retry failed: {retry_e}")

@@ -1,10 +1,8 @@
-from pdb import set_trace as T
 import numpy as np
 
 import torch
 import torch.nn as nn
 
-import pufferlib.emulation
 import pufferlib.pytorch
 import pufferlib.spaces
 
@@ -127,25 +125,19 @@ class LSTMWrapper(nn.Module):
         self.cell.bias_ih = self.lstm.bias_ih_l0
         self.cell.bias_hh = self.lstm.bias_hh_l0
 
-        #self.pre_layernorm = nn.LayerNorm(hidden_size)
-        #self.post_layernorm = nn.LayerNorm(hidden_size)
-
     def forward_eval(self, observations, state):
         '''Forward function for inference. 3x faster than using LSTM directly'''
         hidden = self.policy.encode_observations(observations, state=state)
         h = state['lstm_h']
         c = state['lstm_c']
 
-        # TODO: Don't break compile
         if h is not None:
             assert h.shape[0] == c.shape[0] == observations.shape[0], 'LSTM state must be (h, c)'
             lstm_state = (h, c)
         else:
             lstm_state = None
 
-        #hidden = self.pre_layernorm(hidden)
         hidden, c = self.cell(hidden, lstm_state)
-        #hidden = self.post_layernorm(hidden)
         state['hidden'] = hidden
         state['lstm_h'] = hidden
         state['lstm_c'] = c
@@ -183,17 +175,14 @@ class LSTMWrapper(nn.Module):
         hidden = hidden.reshape(B, TT, self.input_size)
 
         hidden = hidden.transpose(0, 1)
-        #hidden = self.pre_layernorm(hidden)
         hidden, (lstm_h, lstm_c) = self.lstm.forward(hidden, lstm_state)
         hidden = hidden.float()
  
-        #hidden = self.post_layernorm(hidden)
         hidden = hidden.transpose(0, 1)
 
         flat_hidden = hidden.reshape(B*TT, self.hidden_size)
         logits, values = self.policy.decode_actions(flat_hidden)
         values = values.reshape(B, TT)
-        #state.batch_logits = logits.reshape(B, TT, -1)
         state['hidden'] = hidden
         state['lstm_h'] = lstm_h.detach()
         state['lstm_c'] = lstm_c.detach()

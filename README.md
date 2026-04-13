@@ -38,17 +38,20 @@ pokemon_red_rl/
 │   ├── vector.py           # Environment vectorization
 │   ├── pytorch.py          # PyTorch utilities
 │   ├── sweep.py            # Hyperparameter sweeping
-│   ├── config/             # Training configurations
 │   └── extensions/         # C/CUDA extensions for fast GAE computation
 │       ├── pufferlib.cpp   # CPU implementation
 │       └── cuda/           # CUDA implementation
-├── mgba/                   # mGBA Python bindings for Pokémon Red
+├── pokered/                # mGBA Python bindings for Pokémon Red
 │   ├── binding.c           # C Python extension
-│   ├── mgba.py             # Python wrapper
-│   └── include/            # Header files
-├── config/                 # Environment configs
-├── webserver/              # Training visualization server
-└── Docs/                   # Documentation
+│   ├── pokered.py          # Python wrapper (PokemonRed env)
+│   ├── torch.py            # PyTorch policy (CNN + LSTM)
+│   ├── pokered.h           # C environment logic (rewards, state)
+│   └── includes/           # Header files (battle, events, party, mgba)
+├── config/                 # Training configurations
+│   ├── default.ini         # Default hyperparameters
+│   └── pokered.ini         # Pokemon Red overrides + sweep config
+├── scripts/                # Utility scripts
+└── test.py                 # Environment test suite
 ```
 
 ## Usage
@@ -56,18 +59,18 @@ pokemon_red_rl/
 ### Training
 ```bash
 # Train using the default configuration
-python -m pufferlib.pufferl train mgba
+python -m pufferlib.pufferl train pokered
 
 # Train with Weights & Biases logging
-python -m pufferlib.pufferl train mgba --wandb
+python -m pufferlib.pufferl train pokered --wandb
 
 # Train with custom parameters
-python -m pufferlib.pufferl train mgba --train.total-timesteps 10000000
+python -m pufferlib.pufferl train pokered --train.total-timesteps 10000000
 ```
 
 ### Evaluation
 ```bash
-python -m pufferlib.pufferl eval mgba --load-model-path experiments/your_model.pt
+python -m pufferlib.pufferl eval pokered --load-model-path experiments/your_model.pt
 ```
 
 ## Dependencies

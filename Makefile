@@ -5,6 +5,8 @@ NUMPY_INCLUDE := $(shell $(PYTHON) -c "import numpy; print(numpy.get_include())"
 POKERED_DIR := pokered
 POKERED_PLAY_BIN := pokered_play
 POKERED_PLAY_SRC := $(POKERED_DIR)/pokered.c
+POKERED_IMPL_SRCS := $(POKERED_DIR)/environment.c $(POKERED_DIR)/rewards.c $(POKERED_DIR)/observations.c
+BINDING_SO := $(shell $(PYTHON) -c "import sysconfig; print('$(POKERED_DIR)/binding' + sysconfig.get_config_var('EXT_SUFFIX'))")
 SDL2_CFLAGS := $(shell pkg-config --cflags sdl2 2>/dev/null || sdl2-config --cflags 2>/dev/null)
 SDL2_LIBS := $(shell pkg-config --libs sdl2 2>/dev/null || sdl2-config --libs 2>/dev/null || echo -lSDL2)
 
@@ -19,40 +21,39 @@ else ifeq ($(PROFILE),1)
 	OPT_FLAGS := -O2 -g -flto -march=native -mtune=native -mavx2 -mfma -ffast-math -funroll-loops -DENABLE_PERF_COUNTERS
 	LINK_OPT_FLAGS := -O2 -g -flto
 else
-	# Release build: maximum optimization (Strategy #9 from optim_strat.md)
+	# Release build: maximum optimization
 	OPT_FLAGS := -O3 -flto -march=native -mtune=native -mavx2 -mfma -ffast-math -DNDEBUG -fomit-frame-pointer -funroll-loops
 	LINK_OPT_FLAGS := -O3 -flto
 endif
 
-CFLAGS := -DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION -DPLATFORM_DESKTOP -I$(NUMPY_INCLUDE) -Wno-alloc-size-larger-than -Wno-implicit-function-declaration -fmax-errors=3 $(OPT_FLAGS) -DENABLE_VFS
+# Shared mGBA abstraction layer
+MGBA_DIR := mgba
+
+# CFLAGS/LDFLAGS used only for the standalone play target
+CFLAGS := -DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION -DPLATFORM_DESKTOP -I$(NUMPY_INCLUDE) -I$(MGBA_DIR) -Wno-alloc-size-larger-than -Wno-implicit-function-declaration -fmax-errors=3 $(OPT_FLAGS) -DENABLE_VFS
 LDFLAGS := -fwrapv -Bsymbolic-functions $(LINK_OPT_FLAGS) -lmgba
 
-.PHONY: all clean help pokered pokered_play
+.PHONY: all clean help pokered play
 
 all: pokered
 
-pokered: $(POKERED_DIR)/binding.so
+pokered: $(BINDING_SO)
 
 play: $(POKERED_PLAY_BIN)
 
-
-$(POKERED_DIR)/binding.so: $(POKERED_DIR)/binding.c 
+$(BINDING_SO): $(POKERED_DIR)/binding.c $(POKERED_IMPL_SRCS) $(POKERED_DIR)/pokered.h $(MGBA_DIR)/mgba_wrapper.h $(MGBA_DIR)/optim.h $(MGBA_DIR)/env_binding.h
 	@echo "Compiling Pokemon Red binding..."
-	@cd $(POKERED_DIR) && \
-	$(PYTHON) -c "from distutils.core import setup, Extension; import numpy; \
-	setup(ext_modules=[Extension('binding', ['binding.c'], \
-	    include_dirs=[numpy.get_include(), 'include', '-DENABLE_VFS'], \
-	    extra_compile_args='$(CFLAGS)'.split(), \
-	    extra_link_args='$(LDFLAGS)'.split())])" build_ext --inplace
+	DEBUG=$(DEBUG) $(PYTHON) setup.py build_c --inplace
 
-$(POKERED_PLAY_BIN): $(POKERED_PLAY_SRC)
+$(POKERED_PLAY_BIN): $(POKERED_PLAY_SRC) $(POKERED_IMPL_SRCS) $(POKERED_DIR)/pokered.h
 	@echo "Compiling standalone Pokemon Red player..."
-	$(CC) $(CFLAGS) $(SDL2_CFLAGS) -I$(POKERED_DIR) -I$(POKERED_DIR)/includes $< -o $@ $(LDFLAGS) $(SDL2_LIBS)
+	$(CC) $(CFLAGS) $(SDL2_CFLAGS) -I$(POKERED_DIR) -I$(POKERED_DIR)/includes -I$(MGBA_DIR) $< $(POKERED_IMPL_SRCS) -o $@ $(LDFLAGS) $(SDL2_LIBS)
 
 clean:
 	@echo "Cleaning..."
 	@find $(POKERED_DIR) -name "*.so" -delete
 	@find $(POKERED_DIR) -name "build" -type d -exec rm -rf {} + 2>/dev/null || true
+	@rm -rf build
 	@rm -f $(POKERED_PLAY_BIN)
 
 install-deps:

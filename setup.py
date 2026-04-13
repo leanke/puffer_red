@@ -2,7 +2,7 @@
 #    DEBUG=1 python setup.py build_ext --inplace --force
 #    CUDA_VISIBLE_DEVICES=None LD_PRELOAD=$(gcc -print-file-name=libasan.so) python3.12 -m pufferlib.pufferl train
 
-from setuptools import find_packages, find_namespace_packages, setup, Extension
+from setuptools import setup, Extension
 import numpy
 import os
 import glob
@@ -16,7 +16,6 @@ from torch.utils.cpp_extension import (
     CppExtension,
     CUDAExtension,
     BuildExtension,
-    CUDA_HOME,
 )
 
 # Build with DEBUG=1 to enable debug symbols
@@ -117,7 +116,7 @@ class TorchBuildExt(cpp_extension.BuildExtension):
         self.extensions = [e for e in self.extensions if e.name == "pufferlib._C"]
         super().run()
 
-INCLUDE = [numpy.get_include()]
+INCLUDE = [numpy.get_include(), 'mgba']
 extension_kwargs = dict(
     include_dirs=INCLUDE,
     extra_compile_args=extra_compile_args,
@@ -128,38 +127,53 @@ extension_kwargs = dict(
 c_extensions = []
 
 c_extension_paths = glob.glob('*/binding.c', recursive=True)
-c_extensions = [
-    Extension(
+c_extensions = []
+for path in c_extension_paths:
+    game_dir = os.path.dirname(path)
+    game_name = os.path.basename(game_dir)
+    # Collect implementation .c files (exclude binding.c and standalone player)
+    impl_sources = sorted(glob.glob(os.path.join(game_dir, '*.c')))
+    excluded = {os.path.basename(path), f'{game_name}.c'}
+    impl_sources = [s for s in impl_sources if os.path.basename(s) not in excluded]
+    c_extensions.append(Extension(
         path.rstrip('.c').replace('/', '.'),
-        sources=[path],
+        sources=[path] + impl_sources,
         **extension_kwargs,
-    )
-    for path in c_extension_paths if 'matsci' not in path
-]
+    ))
 c_extension_paths = [os.path.join(*path.split('/')[:-1]) for path in c_extension_paths]
 
-for c_ext in c_extensions:
-    if "pokered" in c_ext.name:
-        print(f"Configuring {c_ext.name} with mGBA library")
-        c_ext.extra_objects = []  # Remove raylib
-        c_ext.include_dirs.append('/usr/include/mgba')
-        c_ext.include_dirs.append('pokered/includes')
-        c_ext.extra_compile_args.append('-DENABLE_VFS')
-        # Link against mGBA/SDL2 - use pkg-config for SDL flags when available
-        try:
-            sdl_cflags = subprocess.check_output([
-                'pkg-config', '--cflags', 'sdl2'
-            ], text=True).strip().split()
-            sdl_libs = subprocess.check_output([
-                'pkg-config', '--libs', 'sdl2'
-            ], text=True).strip().split()
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            sdl_cflags = ['-I/usr/include/SDL2', '-D_REENTRANT']
-            sdl_libs = ['-lSDL2']
+def configure_mgba_extension(c_ext):
+    """Configure a C extension that uses the shared mGBA abstraction layer."""
+    print(f"Configuring {c_ext.name} with mGBA library")
+    c_ext.extra_objects = []
+    c_ext.include_dirs.append('/usr/include/mgba')
+    c_ext.include_dirs.append('mgba')
+    c_ext.extra_compile_args.append('-DENABLE_VFS')
+    # Link against mGBA/SDL2 - use pkg-config for SDL flags when available
+    try:
+        sdl_cflags = subprocess.check_output([
+            'pkg-config', '--cflags', 'sdl2'
+        ], text=True).strip().split()
+        sdl_libs = subprocess.check_output([
+            'pkg-config', '--libs', 'sdl2'
+        ], text=True).strip().split()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        sdl_cflags = ['-I/usr/include/SDL2', '-D_REENTRANT']
+        sdl_libs = ['-lSDL2']
 
-        c_ext.extra_compile_args.extend(flag for flag in sdl_cflags if flag)
-        c_ext.extra_link_args.extend(['-lmgba'])
-        c_ext.extra_link_args.extend(flag for flag in sdl_libs if flag)
+    c_ext.extra_compile_args.extend(flag for flag in sdl_cflags if flag)
+    c_ext.extra_link_args.extend(['-lmgba'])
+    c_ext.extra_link_args.extend(flag for flag in sdl_libs if flag)
+
+# Game modules that use the mGBA abstraction layer
+MGBA_GAME_MODULES = ["pokered", "template"]
+
+for c_ext in c_extensions:
+    if any(name in c_ext.name for name in MGBA_GAME_MODULES):
+        configure_mgba_extension(c_ext)
+        # Add game-specific include dirs
+        game_dir = c_ext.name.rsplit('.', 1)[0]
+        c_ext.include_dirs.append(os.path.join(game_dir, 'includes'))
 
 
 

@@ -1,5 +1,3 @@
-from pdb import set_trace as T
-
 import numpy as np
 import warnings
 
@@ -53,14 +51,6 @@ def _nativize(struct, space):
 def nativize(arr, space, struct_dtype):
     struct = np.asarray(arr).view(struct_dtype)[0]
     return _nativize(struct, space)
-
-# TODO: Uncomment?
-'''
-try:
-    from pufferlib.extensions import emulate, nativize
-except ImportError:
-    warnings.warn('PufferLib Cython extensions not installed. Using slow Python versions')
-'''
 
 def get_dtype_bounds(dtype):
     if dtype == bool:
@@ -472,47 +462,3 @@ def _seed_and_reset(env, seed):
             warnings.warn('WARNING: Environment does not support seeding.', DeprecationWarning)
 
     return obs, info
-
-class GymnaxPufferEnv(pufferlib.PufferEnv):
-    def __init__(self, env, env_params, num_envs=1, buf=None):
-        from gymnax.spaces import gymnax_space_to_gym_space
-
-        gymnax_obs_space = env.observation_space(env_params)
-        self.single_observation_space = gymnax_space_to_gym_space(gymnax_obs_space)
-
-        gymnax_act_space = env.action_space(env_params)
-        self.single_action_space = gymnax_space_to_gym_space(gymnax_act_space)
-
-        self.num_agents = num_envs
-
-        super().__init__(buf)
-        self.env_params = env_params
-        self.env = env
-
-        import jax
-        self.reset_fn = jax.jit(jax.vmap(env.reset, in_axes=(0, None)))
-        self.step_fn = jax.jit(jax.vmap(env.step, in_axes=(0, 0, 0, None)))
-        self.rng = jax.random.PRNGKey(0)
-
-    def reset(self, rng, params=None):
-        import jax
-        self.rng, _rng = jax.random.split(self.rng)
-        self.rngs = jax.random.split(_rng, self.num_agents)
-        obs, self.state = self.reset_fn(self.rngs, params)
-        from torch.utils import dlpack as torch_dlpack
-        self.observations = torch_dlpack.from_dlpack(jax.dlpack.to_dlpack(obs))
-        return self.observations, []
-
-    def step(self, action):
-        import jax
-        #self.rng, _rng = jax.random.split(self.rng)
-        #rngs = jax.random.split(_rng, self.num_agents)
-        obs, self.state, reward, done, info = self.step_fn(self.rngs, self.state, action, self.env_params)
-
-        # Convert JAX array to DLPack, then to PyTorch tensor
-        from torch.utils import dlpack as torch_dlpack
-        self.observations = torch_dlpack.from_dlpack(jax.dlpack.to_dlpack(obs))
-        self.rewards = np.asarray(reward)
-        self.terminals = np.asarray(done)
-        infos = [{k: v.mean().item() for k, v in info.items()}]
-        return self.observations, self.rewards, self.terminals, self.terminals, infos

@@ -1,11 +1,7 @@
-import sys
-from pdb import set_trace as T
 from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import torch
-from torch import nn
-from torch.distributions import Categorical
 from torch.distributions.utils import logits_to_probs
 
 import pufferlib
@@ -26,32 +22,11 @@ numpy_to_torch_dtype_dict = {
     np.dtype("int8"): torch.int8,
 }
 
-
-LITTLE_BYTE_ORDER = sys.byteorder == "little"
-
-# USER NOTE: You should not get any errors in nativize.
-# This is a complicated piece of code that attempts to convert
-# flat bytes to structured tensors without breaking torch.compile.
-# If you hit any errors, please post on discord.gg/puffer
-# One exception: make sure you didn't change the dtype of your data
-# ie by doing torch.Tensor(data) instead of torch.from_numpy(data)
-
-# dtype of the tensor
-# shape of the tensor
-# starting element of the observation
-# number of elements of the observation to take
-# could be a namedtuple or dataclass
 NativeDTypeValue = Tuple[torch.dtype, List[int], int, int]
 NativeDType = Union[NativeDTypeValue, Dict[str, Union[NativeDTypeValue, "NativeDType"]]]
 
-# TODO: handle discrete obs
-# Spend some time trying to break this fn with differnt obs
 def nativize_dtype(emulated) -> NativeDType:
-    # sample dtype - the dtype of what we obtain from the environment (usually bytes)
     sample_dtype: np.dtype = emulated['observation_dtype']
-    # structured dtype - the gym.Space converted numpy dtype
-
-    # the observation represents (could be dict, tuple, box, etc.)
     structured_dtype: np.dtype = emulated['emulated_observation_dtype']
     subviews, dtype, shape, offset, delta = _nativize_dtype(sample_dtype, structured_dtype)
     if subviews is None:
@@ -103,34 +78,12 @@ def nativize_tensor(observation: torch.Tensor, native_dtype: NativeDType):
     return _nativize_tensor(observation, native_dtype)
 
 
-# torch.view(dtype) does not compile
-# This is a workaround hack
-# @thatguy - can you figure out a more robust way to handle cast?
-# I think it may screw up for non-uint data... so I put a hard .view
-# fallback that breaks compile
-def compilable_cast(u8, dtype):
-    if dtype in (torch.uint8, torch.uint16, torch.uint32, torch.uint64):
-        n = dtype.itemsize
-        bytes = [u8[..., i::n].to(dtype) for i in range(n)]
-        if not LITTLE_BYTE_ORDER:
-            bytes = bytes[::-1]
-
-        bytes = sum(bytes[i] << (i * 8) for i in range(n))
-        return bytes.view(dtype)
-    return u8.view(dtype)  # breaking cast
-
-
 def _nativize_tensor(observation: torch.Tensor, native_dtype: NativeDType):
     if isinstance(native_dtype, tuple):
         dtype, shape, offset, delta = native_dtype
         torch._check_is_size(offset)
         torch._check_is_size(delta)
-        # Important, we are assuming that obervations of shape
-        # [N, D] where N is number of examples and D is number of
-        # bytes per example is being passed in
         slice = observation.narrow(1, offset, delta)
-        # slice = slice.contiguous()
-        # slice = compilable_cast(slice, dtype)
         slice = slice.view(dtype)
         slice = slice.view(observation.shape[0], *shape)
         return slice
@@ -141,42 +94,21 @@ def _nativize_tensor(observation: torch.Tensor, native_dtype: NativeDType):
         return subviews
 
 
-def nativize_observation(observation, emulated):
-    # TODO: Any way to check that user has not accidentally cast data to float?
-    # float is natively supported, but only if that is the actual correct type
-    return nativize_tensor(
-        observation,
-        emulated['observation_dtype'],
-        emulated['emulated_observation_dtype'],
-    )
-
-def flattened_tensor_size(native_dtype):
-    return _flattened_tensor_size(native_dtype)
-
-def _flattened_tensor_size(native_dtype):
-    if isinstance(native_dtype, tuple):
-        return np.prod(native_dtype[1])  # shape
-    else:
-        res = 0
-        for _, dtype in native_dtype.items():
-            res += _flattened_tensor_size(dtype)
-        return res
-
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     """CleanRL's default layer initialization"""
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
 
-# taken from torch.distributions.Categorical
 def log_prob(logits, value):
+    """Taken from torch.distributions.Categorical"""
     value = value.long().unsqueeze(-1)
     value, log_pmf = torch.broadcast_tensors(value, logits)
     value = value[..., :1]
     return log_pmf.gather(-1, value).squeeze(-1)
 
-# taken from torch.distributions.Categorical
 def entropy(logits):
+    """Taken from torch.distributions.Categorical"""
     min_real = torch.finfo(logits.dtype).min
     logits = torch.clamp(logits, min=min_real)
     p_log_p = logits * logits_to_probs(logits)
@@ -198,7 +130,6 @@ def sample_logits(logits, action=None):
         return action, log_probs, logits_entropy
     elif is_discrete:
         logits = logits.unsqueeze(0)
-    # TODO: Double check this
     else: #multi-discrete
         logits = torch.nn.utils.rnn.pad_sequence(
             [l.transpose(0,1) for l in logits], 
@@ -206,7 +137,6 @@ def sample_logits(logits, action=None):
             padding_value=-torch.inf
         ).permute(1,2,0)
 
-    # This can fail on nans etc
     normalized_logits = logits - logits.logsumexp(dim=-1, keepdim=True)
     probs = logits_to_probs(logits)
 

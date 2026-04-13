@@ -26,7 +26,7 @@ if [ "$MODE" = "train" ]; then
 elif [ "$MODE" = "test" ]; then
     # Test mode - just run the test script
     LD_PRELOAD=/usr/lib/gcc/x86_64-linux-gnu/13/libasan.so gdb \
-        --args "$PYTHON" test_mgba.py 50
+        --args "$PYTHON" test.py 50
 else
     # Custom command
     LD_PRELOAD=/usr/lib/gcc/x86_64-linux-gnu/13/libasan.so gdb \

@@ -9,7 +9,6 @@ Usage:
     python pokered.py --full       # Run full test suite
 """
 
-import sys
 import time
 import argparse
 import numpy as np
@@ -273,24 +272,3 @@ if __name__ == '__main__':
         fps, _ = test_step(env, args.steps)
         test_close(env)
         print(f'\n=== BENCHMARK: {fps:.1f} steps/s ===')
-
-
-
-
-
-
-
-
-
-# ┌──────────┬──────────┬───────────┐
-# │  Envs    │    1     │     8     │
-# ├──────────┼──────────┼───────────┤
-# │  SPS     │  5,000   │   35,000  │
-# ├──────────┼──────────┼───────────┤
-# │  2x Vec  │  6,000   │   42,000  │
-# │  4x Vec  │  6,000   │   84,000  │
-# │  8x Vec  │ 24,000   │  168,000  │
-# │ 16x Vec  │ 48,000   │  336,000  │
-# └──────────┴──────────┴───────────┘
-
-

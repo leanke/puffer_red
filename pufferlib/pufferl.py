@@ -52,33 +52,18 @@ ADVANTAGE_CUDA = shutil.which("nvcc") is not None
 
 
 import os
-import errno
 
-FIFO_PATH = "/tmp/puffer_dashboard.fifo"
+DASHBOARD_PATH = "/tmp/puffer_dashboard.txt"
 
-if not os.path.exists(FIFO_PATH):
-    os.mkfifo(FIFO_PATH)
-
-class FifoWriter:
+class DashboardWriter:
     def __init__(self, path):
         self.path = path
-        self.fd = None
 
     def write(self, text):
-        if self.fd is None:
-            try:
-                fd = os.open(self.path, os.O_WRONLY | os.O_NONBLOCK)
-                self.fd = os.fdopen(fd, "w")
-            except OSError as e:
-                if e.errno == errno.ENXIO:
-                    return  # no reader yet
-                raise
-
-        try:
-            self.fd.write(text)
-            self.fd.flush()
-        except BrokenPipeError:
-            self.fd = None
+        tmp = self.path + ".tmp"
+        with open(tmp, "w") as f:
+            f.write(text)
+        os.replace(tmp, self.path)
 
 
 
@@ -86,7 +71,7 @@ class FifoWriter:
 class PuffeRL:
     def __init__(self, config, vecenv, policy, logger=None):
         # Backend perf optimization
-        self.dashboard_fifo = FifoWriter(FIFO_PATH)
+        self.dashboard_writer = DashboardWriter(DASHBOARD_PATH)
 
         torch.set_float32_matmul_precision('high')
         torch.backends.cudnn.deterministic = config['torch_deterministic']
@@ -94,9 +79,6 @@ class PuffeRL:
 
         # Reproducibility
         seed = config['seed']
-        #random.seed(seed)
-        #np.random.seed(seed)
-        #torch.manual_seed(seed)
 
         # Vecenv info
         vecenv.async_reset(seed)
@@ -381,16 +363,6 @@ class PuffeRL:
             prio_probs = (prio_weights + 1e-6)/(prio_weights.sum() + 1e-6)
             idx = torch.multinomial(prio_probs, self.minibatch_segments)
 
-            # # log batches of shit
-            # self.logger.log({
-                # 'batch/selected_indices': idx.tolist(),
-                # 'batch/prio_weights': prio_weights.tolist(),
-                # 'batch/prio_probs': prio_probs.tolist(),
-                # 'batch/rewards': self.rewards[idx].mean().item(),
-                # 'batch/advantages': advantages[idx].mean().item(),
-                # 'batch/advantages_std': advantages[idx].std().item(),
-            # }, step=self.global_step)
-
             mb_prio = (self.segments*prio_probs[idx, None])**-anneal_beta
             mb_obs = self.observations[idx]
             mb_actions = self.actions[idx]
@@ -427,11 +399,9 @@ class PuffeRL:
                 approx_kl = ((ratio - 1) - logratio).mean()
                 clipfrac = ((ratio - 1.0).abs() > config['clip_coef']).float().mean()
 
-            adv = advantages[idx]
             adv = compute_puff_advantage(mb_values, mb_rewards, mb_terminals,
-                ratio, adv, config['gamma'], config['gae_lambda'],
+                ratio, advantages[idx].clone(), config['gamma'], config['gae_lambda'],
                 config['vtrace_rho_clip'], config['vtrace_c_clip'])
-            adv = mb_advantages
             adv = mb_prio * (adv - adv.mean()) / (adv.std() + 1e-8)
 
             # Losses
@@ -448,7 +418,7 @@ class PuffeRL:
             entropy_loss = entropy.mean()
 
             loss = pg_loss + config['vf_coef']*v_loss - config['ent_coef']*entropy_loss
-            self.amp_context.__enter__() # TODO: AMP needs some debugging
+            self.amp_context.__enter__()  # TODO: AMP needs debugging
 
             # This breaks vloss clipping?
             self.values[idx] = newvalue.detach().float()
@@ -523,9 +493,6 @@ class PuffeRL:
             **{f'environment/{k}': v for k, v in self.stats.items()},
             **{f'losses/{k}': v for k, v in self.losses.items()},
             **{f'performance/{k}': v['elapsed'] for k, v in self.profile},
-            #**{f'environment/{k}': dist_mean(v, device) for k, v in self.stats.items()},
-            #**{f'losses/{k}': dist_mean(v, device) for k, v in self.losses.items()},
-            #**{f'performance/{k}': dist_sum(v['elapsed'], device) for k, v in self.profile},
         }
 
         if torch.distributed.is_initialized():
@@ -686,7 +653,7 @@ class PuffeRL:
         #lines = frame.splitlines()
         #TARGET_LINES = 40
         #lines = lines[:TARGET_LINES] + [""] * max(0, TARGET_LINES - len(lines))
-        self.dashboard_fifo.write(frame)
+        self.dashboard_writer.write(frame)
 
 
 
@@ -1018,18 +985,6 @@ def eval(env_name, args=None, vecenv=None, policy=None):
         if len(frames) < args['save_frames']:
             frames.append(render)
 
-        # Screenshot Ocean envs with F12, gifs with control + F12
-#        if driver.render_mode == 'ansi':
-            #          print('\033[0;0H' + render + '\n')
-                  #            time.sleep(1/args['fps'])
-                  #      elif driver.render_mode == 'rgb_array':
-                             #           pass
-            #import cv2
-            #render = cv2.cvtColor(render, cv2.COLOR_RGB2BGR)
-            #cv2.imshow('frame', render)
-            #cv2.waitKey(1)
-            #time.sleep(1/args['fps'])
-
         with torch.no_grad():
             ob = torch.as_tensor(ob).to(device)
             logits, value = policy.forward_eval(ob, state)
@@ -1080,16 +1035,15 @@ def sweep(args=None, env_name=None):
         args['train']['total_timesteps'] = total_timesteps
 
 def profile(args=None, env_name=None, vecenv=None, policy=None):
-    args = load_config()
+    args = args or load_config(env_name)
     vecenv = vecenv or load_env(env_name, args)
     policy = policy or load_policy(args, vecenv)
 
     train_config = dict(**args['train'], env=args['env_name'], tag=args['tag'])
     pufferl = PuffeRL(train_config, vecenv, policy, neptune=args['neptune'], wandb=args['wandb'])
 
-    import torchvision.models as models
-    from torch.profiler import profile, record_function, ProfilerActivity
-    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True) as prof:
+    from torch.profiler import profile as torch_profile, record_function, ProfilerActivity
+    with torch_profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True) as prof:
         with record_function("model_inference"):
             for _ in range(10):
                 stats = pufferl.evaluate()

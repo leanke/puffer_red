@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include "mgba_wrapper.h"
+#include "../../mgba/mgba_wrapper.h"
 
 typedef struct {
     uint16_t address;
@@ -11,12 +11,7 @@ typedef struct {
     const char* name;
 } Event;
 
-typedef struct {
-    const Event* events;
-    size_t count;
-} EventList;
-
-const Event EVENT_LIST[] = {
+static const Event EVENT_LIST[] = {
     {0xD747, 0, "Followed Oak Into Lab"},
     {0xD747, 3, "Hall Of Fame Dex Rating"},
     {0xD747, 6, "Pallet After Getting Pokeballs"},
@@ -45,7 +40,6 @@ const Event EVENT_LIST[] = {
     {0xD751, 7, "Beat Viridian Gym Trainer 5"},
     {0xD752, 0, "Beat Viridian Gym Trainer 6"},
     {0xD752, 1, "Beat Viridian Gym Trainer 7"},
-    // {0xD754, 0, "Bought Museum Ticket"},
     {0xD754, 1, "Got Old Amber"},
     {0xD755, 2, "Beat Pewter Gym Trainer 0"},
     {0xD755, 6, "Got Tm34"},
@@ -327,11 +321,11 @@ const Event EVENT_LIST[] = {
     {0xD7E9, 7, "Beat Route 21 Trainer 6"},
     {0xD7EA, 0, "Beat Route 21 Trainer 7"},
     {0xD7EA, 1, "Beat Route 21 Trainer 8"},
-    {0xD7EB, 0, "1St Route22 Rival Battle"},
-    {0xD7EB, 1, "2Nd Route22 Rival Battle"},
-    {0xD7EB, 5, "Beat Route22 Rival 1St Battle"},
-    {0xD7EB, 6, "Beat Route22 Rival 2Nd Battle"},
-    {0xD7EB, 7, "Route22 Rival Wants Battle"},
+//    {0xD7EB, 0, "1St Route22 Rival Battle"},
+//    {0xD7EB, 1, "2Nd Route22 Rival Battle"},
+//    {0xD7EB, 5, "Beat Route22 Rival 1St Battle"},
+//    {0xD7EB, 6, "Beat Route22 Rival 2Nd Battle"},
+//    {0xD7EB, 7, "Route22 Rival Wants Battle"},
     {0xD7ED, 0, "Passed Cascadebadge Check"},
     {0xD7ED, 1, "Passed Thunderbadge Check"},
     {0xD7ED, 2, "Passed Rainbowbadge Check"},
@@ -520,7 +514,7 @@ const Event EVENT_LIST[] = {
     {0xD881, 1, "Seafoam4 Boulder2 Down Hole"},
     {0xD882, 2, "Beat Articuno"}
 };
-const size_t EVENT_COUNT = sizeof(EVENT_LIST) / sizeof(Event);
+static const size_t EVENT_COUNT = sizeof(EVENT_LIST) / sizeof(Event);
 
 
 #endif // EVENTS_H

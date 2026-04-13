@@ -3,9 +3,6 @@ c_*.c
 pufferlib/extensions.c
 pufferlib/puffernet.c
 
-# Raylib
-raylib_wasm/
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -150,6 +147,5 @@ checkpoints/
 experiments/
 wandb/
 .neptune/
-raylib*/
 docs/
 

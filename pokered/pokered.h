@@ -1,183 +1,185 @@
 #ifndef POKEMONREDENV_H
 #define POKEMONREDENV_H
 
+#include "../mgba/mgba_wrapper.h"
 #include "./includes/battle.h"
 #include "./includes/events.h"
-#include "./includes/mgba_wrapper.h"
-#include "./includes/party.h"
 
 #define SCREEN_WIDTH 160
 #define SCALED_WIDTH 80
 #define SCALED_HEIGHT 72
 #define SCALED_PIXELS (SCALED_WIDTH * SCALED_HEIGHT)
 
-#define EXTRA_OBS 5 // extras x, y, map_n, badges, party_count
+#define METATILE_PX 8
+#define SCREEN_TILES_X 10
+#define SCREEN_TILES_Y 9
+#define PLAYER_TILE_X 4
+#define PLAYER_TILE_Y 4
+#define HEATMAP_BRIGHTNESS 8.0f
+#define HEATMAP_MAX_BRIGHT 100.0f
+
+#define SCALAR_OBS 32
+#define HEATMAP_OBS (SCREEN_TILES_X * SCREEN_TILES_Y)
+#define EXTRA_OBS (SCALAR_OBS + HEATMAP_OBS)
 #define TOTAL_OBSERVATIONS (SCALED_PIXELS + EXTRA_OBS)
+
+#define GAME_MODE_GENERAL 0
+#define GAME_MODE_BATTLE  1
 
 #define PKMN_X_ADDR 0xD362
 #define PKMN_Y_ADDR 0xD361
 #define PKMN_MAP_ADDR 0xD35E
 #define PKMN_BADGES_ADDR 0xD356
-#define PKMN_PARTY_COUNT_ADDR 0xD163
 #define PKMN_MONEY_ADDR 0xD347
-#define PKM_LEVEL_ADDR_1 0xD18C
-#define PKM_LEVEL_ADDR_2 0xD1B8
-#define PKM_LEVEL_ADDR_3 0xD1E4
-#define PKM_LEVEL_ADDR_4 0xD210
-#define PKM_LEVEL_ADDR_5 0xD23C
-#define PKM_LEVEL_ADDR_6 0xD268
-// PARTY_ADDR = [0xD164, 0xD165, 0xD166, 0xD167, 0xD168, 0xD169]
-// #define PKMN1_ADDR 0xD16B
-// #define PKMN2_ADDR 0xD197
-// #define PKMN3_ADDR 0xD1C3
-// #define PKMN4_ADDR 0xD1EF
-// #define PKMN5_ADDR 0xD21B
-// #define PKMN6_ADDR 0xD247
-// hm_ids = [0xC4, 0xC5, 0xC6, 0xC7, 0xC8]
 
-#define REWARD_BADGE 5.0f   // 1.0f
-#define REWARD_POKEMON 1.0f // 0.f
-// #define REWARD_MAP 0.001f    // 0.2f
-#define REWARD_UNIQUE_COORD 0.005f // 0.5f
-#define REWARD_LEVEL 0.5f
-#define REWARD_EVENT 0.1f
-// #define STAGNATION_LIMIT 1000
+#define PKMN_FACING_ADDR 0xC109
 
-#define MAX_MAPS 256 // def way to big for the map but oh well
+#define MENU_CURRENT_ITEM_ADDR  0xCC26
+#define MENU_MAX_ITEM_ADDR      0xCC28
+#define MENU_SCROLL_OFFSET_ADDR 0xCC36
+#define MENU_TEXTBOX_ID_ADDR    0xD125
+#define MENU_TOP_ITEM_Y_ADDR    0xCC24
+#define MENU_TOP_ITEM_X_ADDR    0xCC25
+
+#define DAMAGE_MULTIPLIERS_ADDR    0xD05B
+#define MOVE_MISSED_ADDR           0xD05F
+#define PLAYER_BATTLE_STATUS1_ADDR 0xD062
+#define PLAYER_BATTLE_STATUS2_ADDR 0xD063
+#define PLAYER_BATTLE_STATUS3_ADDR 0xD064
+#define ENEMY_BATTLE_STATUS1_ADDR  0xD067
+#define ENEMY_BATTLE_STATUS2_ADDR  0xD068
+#define ENEMY_BATTLE_STATUS3_ADDR  0xD069
+#define CUR_OPPONENT_ADDR          0xD059
+
+#define PLAYER_MOVING_DIR_ADDR  0xD528
+#define NUM_STEPS_TO_TAKE_ADDR  0xCCA1
+#define NUM_SPRITES_ADDR        0xD4E1
+#define REPEL_STEPS_ADDR        0xD0DB
+#define CUR_MAP_TILESET_ADDR    0xD367
+#define CUR_MAP_HEIGHT_ADDR     0xD368
+#define CUR_MAP_WIDTH_ADDR      0xD369
+
+#define WD72E_ADDR              0xD72E
+#define WD72E_DISABLE_BATTLES_BIT 4
+
+#define VIRIDIAN_CITY_MAP       0x01
+#define VIRIDIAN_SCRIPT_ADDR    0xD5F4
+#define BATTLE_TYPE_OLD_MAN     0x02
+
+#define WEIGHT_BATTLE      0.15f
+#define WEIGHT_EXPLORATION 0.40f
+#define WEIGHT_EVENTS      0.15f
+#define WEIGHT_LEVELING    0.15f
+#define WEIGHT_MILESTONES  0.25f
+
+#define MAX_MAPS 256
 #define MAX_X 256
 #define MAX_Y 256
 #define VISITED_COORDS_SIZE (MAX_MAPS * MAX_X * MAX_Y)
 
 typedef struct {
   float episode_length;
-  float level_sum;
   float episode_return;
-  float pkmn1_lvl;
   float money;
+  float level_sum;
+  float pkmn1_lvl;
   float pkmn2_lvl;
-  float event_sum;
   float pkmn3_lvl;
-  float unique_coords;
   float pkmn4_lvl;
-  float party_count;
   float pkmn5_lvl;
-  float badges;
   float pkmn6_lvl;
+  float party_count;
+  float party_hp;
+  float badges;
+  float event_sum;
+  float unique_coords;
+  float map_n;
+  float battles_won;
+  float battles_lost;
+  float battle_steps;
+  float run_attempts;
+  float explore_signal;
+  float battle_signal;
+  float events_signal;
+  float leveling_signal;
+  float milestone_signal;
   float n;
 } Log;
 
-// typedef struct {
-//   uint8_t poke_id;
-//   uint8_t type1;
-//   uint16_t current_hp;
-//   uint16_t max_hp;
-//   uint8_t status;
-//   uint8_t level;
-//   uint16_t attack;
-//   uint16_t defense;
-//   uint16_t speed;
-//   uint16_t special;
-// } Pkmn;
+typedef struct {
+  uint32_t idx;
+  uint8_t x;
+  uint8_t y;
+  uint8_t map_n;
+  uint8_t badges;
+  uint8_t party_count;
+  uint8_t levels[6];
+} CoreState;
 
 typedef struct {
-
-  uint8_t x;     // read_mem(env, PKMN_X_ADDR);
-  uint8_t y;     // read_mem(env, PKMN_Y_ADDR);
-  uint8_t map_n; // read_mem(env, PKMN_MAP_ADDR);
-  uint32_t idx;  // coord_index(map_n, x, y);
-
-  uint8_t badges; // read_mem(env, PKMN_BADGES_ADDR);
-  uint32_t money; // read_bcd(env, PKMN_MONEY_ADDR);
-
-  uint8_t party_count; // read_mem(env, PKMN_PARTY_COUNT_ADDR);
-  uint8_t pkmn1_lvl;   // read_mem(env, PKM_LEVEL_ADDR_1);
-  uint8_t pkmn2_lvl;   // read_mem(env, PKM_LEVEL_ADDR_2);
-  uint8_t pkmn3_lvl;   // read_mem(env, PKM_LEVEL_ADDR_3);
-  uint8_t pkmn4_lvl;   // read_mem(env, PKM_LEVEL_ADDR_4);
-  uint8_t pkmn5_lvl;   // read_mem(env, PKM_LEVEL_ADDR_5);
-  uint8_t pkmn6_lvl;   // read_mem(env, PKM_LEVEL_ADDR_6);
-
-} RamState;
-
-typedef struct {
-  RamState ram;
-  RamState prev_ram;
+  CoreState core;
   BattleState battle;
+  CoreState prev_core;
   BattleState prev_battle;
-  // PartyPokemon party[6];
 } GameState;
+
+typedef struct {
+  float total_explore_signal;
+  float total_battle_signal;
+  float total_events_signal;
+  float total_leveling_signal;
+  float total_milestone_signal;
+  uint32_t battle_steps;
+  uint16_t battles_won;
+  uint16_t battles_lost;
+  uint16_t run_attempts;
+} EpisodeStats;
 
 typedef struct {
   Log log;
   mGBA emu;
   GameState gstate;
+
   float *observations;
   int *actions;
   float *rewards;
   unsigned char *terminals;
   unsigned char *truncations;
+  uint8_t *visited_coords;
+  uint16_t *exploration_heatmap;
+  uint8_t *prev_events;
+
+  EpisodeStats stats;
 
   int32_t frame_count;
   int32_t step_count;
   int32_t max_episode_length;
-  float score;
-
-  int32_t stagnation;
-  uint8_t *visited_coords;
-  uint8_t *prev_visited_coords;
-  uint32_t unique_coords_count;
   int32_t prev_event_sum;
-  uint8_t *prev_events;
+  uint32_t unique_coords_count;
+  float score;
+  float heatmap_decay;
+  float prev_party_hp_frac;
+  int prev_action;
+  uint8_t game_mode;
+
   bool full_reset;
+  bool disable_wild_until_badge;
 } PokemonRedEnv;
 
-void update_ram(PokemonRedEnv *env);
+void update_observations(PokemonRedEnv *env);
+void update_core_state(PokemonRedEnv *env);
+
+int calc_level_sum(CoreState *core);
+int calc_event_sum(mGBA *emu, uint8_t *prev_events);
+float calculate_rewards(PokemonRedEnv *env);
+
+void allocate(PokemonRedEnv *env);
+void free_allocated(PokemonRedEnv *env);
+void add_log(PokemonRedEnv *env);
 void c_reset(PokemonRedEnv *env);
 void c_step(PokemonRedEnv *env);
 void c_render(PokemonRedEnv *env);
 void c_close(PokemonRedEnv *env);
-void allocate(PokemonRedEnv *env);
-void free_allocated(PokemonRedEnv *env);
-void add_log(PokemonRedEnv *env);
-
-static inline void update_observations(PokemonRedEnv *env) {
-  if (!env || !env->emu.video_buffer || !env->observations)
-    return;
-
-  PREFETCH_READ(env->emu.video_buffer);
-  PREFETCH_WRITE(env->observations);
-  const color_t *vbuf = env->emu.video_buffer;
-  float *obs = env->observations;
-  RamState *ram = &env->gstate.ram;
-  // downsamepling and greyscale
-  for (int sy = 0; sy < SCALED_HEIGHT; sy++) {
-    for (int sx = 0; sx < SCALED_WIDTH; sx++) {
-      int src_y = sy * 2;
-      int src_x = sx * 2;
-
-      float gray_sum = 0.0f;
-      for (int dy = 0; dy < 2; dy++) {
-        for (int dx = 0; dx < 2; dx++) {
-          int src_idx = (src_y + dy) * SCREEN_WIDTH + (src_x + dx);
-          color_t pixel = vbuf[src_idx];
-          float r = (float)((pixel >> 16) & 0xFF);
-          float g = (float)((pixel >> 8) & 0xFF);
-          float b = (float)(pixel & 0xFF);
-          gray_sum += 0.299f * r + 0.587f * g + 0.114f * b;
-        }
-      }
-      obs[sy * SCALED_WIDTH + sx] = gray_sum * 0.25f; // 4pxl avg
-    }
-  }
-
-  // extras
-  int offset = SCALED_PIXELS;
-  obs[offset + 0] = (float)ram->x;
-  obs[offset + 1] = (float)ram->y;
-  obs[offset + 2] = (float)ram->map_n;
-  obs[offset + 3] = (float)ram->badges;
-  obs[offset + 4] = (float)ram->party_count;
-}
 
 static inline uint32_t coord_index(uint8_t map, uint8_t x, uint8_t y) {
   return ((uint32_t)map << 16) | ((uint32_t)x << 8) | (uint32_t)y;
@@ -185,16 +187,16 @@ static inline uint32_t coord_index(uint8_t map, uint8_t x, uint8_t y) {
 static inline bool is_coord_visited(PokemonRedEnv *env) {
   if (!env || !env->visited_coords)
     return false;
-  if (env->gstate.ram.idx >= VISITED_COORDS_SIZE)
+  if (env->gstate.core.idx >= VISITED_COORDS_SIZE)
     return false;
-  return env->visited_coords[env->gstate.ram.idx];
+  return env->visited_coords[env->gstate.core.idx];
 }
 static inline void mark_coord_visited(PokemonRedEnv *env) {
   if (!env || !env->visited_coords)
     return;
-  if (env->gstate.ram.idx >= VISITED_COORDS_SIZE)
+  if (env->gstate.core.idx >= VISITED_COORDS_SIZE)
     return;
-  env->visited_coords[env->gstate.ram.idx] = 1;
+  env->visited_coords[env->gstate.core.idx] = 1;
 }
 static inline void clear_visited_coords(PokemonRedEnv *env) {
   if (env && env->visited_coords) {
@@ -202,233 +204,14 @@ static inline void clear_visited_coords(PokemonRedEnv *env) {
   }
 }
 
-void allocate(PokemonRedEnv *env) {
-  env->observations = (float *)calloc(TOTAL_OBSERVATIONS, sizeof(float));
-  env->actions = (int *)calloc(1, sizeof(int));
-  env->rewards = (float *)calloc(1, sizeof(float));
-  env->terminals = (unsigned char *)calloc(1, sizeof(unsigned char));
-  env->truncations = (unsigned char *)calloc(1, sizeof(unsigned char));
-
-}
-void free_allocated(PokemonRedEnv *env) {
-  free(env->observations);
-  free(env->actions);
-  free(env->rewards);
-  free(env->terminals);
-  free(env->truncations);
-  free(env->visited_coords);
-  free(env->prev_visited_coords);
-  free(env->prev_events);
-}
-void add_log(PokemonRedEnv *env) {
-  RamState *ram = &env->gstate.ram;
-
-  env->log.episode_length = env->step_count;
-  env->log.episode_return = env->score;
-  env->log.pkmn1_lvl = ram->pkmn1_lvl;
-  env->log.money = ram->money;
-  env->log.pkmn2_lvl = ram->pkmn2_lvl;
-  env->log.event_sum = env->prev_event_sum;
-  env->log.pkmn3_lvl = ram->pkmn3_lvl;
-  env->log.unique_coords = env->unique_coords_count;
-  env->log.pkmn4_lvl = ram->pkmn4_lvl;
-  env->log.party_count = ram->party_count;
-  env->log.pkmn5_lvl = ram->pkmn5_lvl;
-  env->log.badges = ram->badges;
-  env->log.pkmn6_lvl = ram->pkmn6_lvl;
-  env->log.n++;
+static inline bool is_directional_action(int action) {
+  return action >= MGBA_ACTION_RIGHT && action <= MGBA_ACTION_DOWN;
 }
 
-// void read_pkmn(mGBA *emu, Pkmn *pkmn, uint16_t start_addr) {
-//   pkmn->poke_id = read_mem(emu, start_addr);
-//   pkmn->type1 = read_mem(emu, start_addr + 0x05);
-//   pkmn->current_hp = read_uint16(emu, start_addr + 0x01);
-//   pkmn->max_hp = read_uint16(emu, start_addr + 0x22);
-//   pkmn->status = read_mem(emu, start_addr + 0x04);
-//   pkmn->level = read_mem(emu, start_addr + 0x21);
-//   pkmn->attack = read_uint16(emu, start_addr + 0x24);
-//   pkmn->defense = read_uint16(emu, start_addr + 0x26);
-//   pkmn->speed = read_uint16(emu, start_addr + 0x28);
-//   pkmn->special = read_uint16(emu, start_addr + 0x2A);
-// }
-void update_ram(PokemonRedEnv *env) {
-  RamState *ram = &env->gstate.ram;
-  ram->x = read_mem(&env->emu, PKMN_X_ADDR);
-  ram->y = read_mem(&env->emu, PKMN_Y_ADDR);
-  ram->map_n = read_mem(&env->emu, PKMN_MAP_ADDR);
-  ram->idx = coord_index(ram->map_n, ram->x, ram->y);
-  ram->badges = read_mem(&env->emu, PKMN_BADGES_ADDR);
-  ram->money = read_bcd(&env->emu, PKMN_MONEY_ADDR);
-  ram->party_count = read_mem(&env->emu, PKMN_PARTY_COUNT_ADDR);
-  ram->pkmn1_lvl = read_mem(&env->emu, PKM_LEVEL_ADDR_1);
-  ram->pkmn2_lvl = read_mem(&env->emu, PKM_LEVEL_ADDR_2);
-  ram->pkmn3_lvl = read_mem(&env->emu, PKM_LEVEL_ADDR_3);
-  ram->pkmn4_lvl = read_mem(&env->emu, PKM_LEVEL_ADDR_4);
-  ram->pkmn5_lvl = read_mem(&env->emu, PKM_LEVEL_ADDR_5);
-  ram->pkmn6_lvl = read_mem(&env->emu, PKM_LEVEL_ADDR_6);
-}
-int calc_level_sum(RamState *ram) {
-  int level_sum = 0;
-  level_sum += ram->pkmn1_lvl;
-  level_sum += ram->pkmn2_lvl;
-  level_sum += ram->pkmn3_lvl;
-  level_sum += ram->pkmn4_lvl;
-  level_sum += ram->pkmn5_lvl;
-  level_sum += ram->pkmn6_lvl;
-  return level_sum;
-}
-int calc_event_sum(mGBA *emu, uint8_t *prev_events) {
-  int sum = 0;
-  for (size_t i = 0; i < EVENT_COUNT; ++i) {
-    uint8_t value = read_mem(emu, EVENT_LIST[i].address);
-    uint8_t completed = (value >> EVENT_LIST[i].bit) & 1;
-    if (completed) {
-      if (prev_events && !prev_events[i]) {
-        printf("Event completed: %s\n", EVENT_LIST[i].name);
-      }
-      sum++;
-    }
-    if (prev_events) {
-      prev_events[i] = completed;
-    }
-  }
-  return sum;
-}
-static float calculate_rewards(PokemonRedEnv *env) {
-  float reward = 0.0f;
-  PREFETCH_READ(env->visited_coords);
-
-  update_ram(env);
-  RamState *ram = &env->gstate.ram;
-  RamState *prev_ram = &env->gstate.prev_ram;
-
-  int level_sum = calc_level_sum(ram);
-  int prev_level_sum = calc_level_sum(prev_ram);
-
-  if (ram->badges > prev_ram->badges) {
-    reward += REWARD_BADGE;
-    printf("You beat a gym! Badge count: %d\n", ram->badges);
-  }
-
-  if (ram->party_count > prev_ram->party_count && ram->party_count <= 6) {
-    reward += REWARD_POKEMON;
-    printf("You caught a new Pokemon! Party count: %d\n", ram->party_count);
-  }
-
-  // if (ram->map_n != prev_ram->map_n) {
-  //   reward += REWARD_MAP;
-  // }
-
-  if (!is_coord_visited(env)) {
-    mark_coord_visited(env);
-    env->unique_coords_count++;
-    reward += REWARD_UNIQUE_COORD;
-    if (env->prev_visited_coords[env->gstate.ram.idx] == 0) {
-      reward += REWARD_UNIQUE_COORD; // fake memory?
-    }
-  }
-
-  if (level_sum > prev_level_sum && ram->party_count == prev_ram->party_count) {
-    // int level_diff = level_sum - prev_level_sum;
-    reward += REWARD_LEVEL;
-    printf("You have leveled up! New level sum: %d\n", level_sum);
-  }
-
-  // Event reward delta
-  int event_sum = calc_event_sum(&env->emu, env->prev_events);
-  if (event_sum > env->prev_event_sum) {
-    reward += (event_sum - env->prev_event_sum) * REWARD_EVENT;
-    // printf("You have completed an event! New event sum: %d\n", event_sum);
-  }
-
-  env->prev_event_sum = event_sum;
-  env->gstate.prev_ram = env->gstate.ram;
-  return reward;
-}
-
-void c_reset(PokemonRedEnv *env) {
-  if (!env || !env->emu.core)
-    return;
-  if (env->full_reset) {
-    initial_load_state(&env->emu, env->emu.state_path);
-  }
-  RamState *ram = &env->gstate.ram;
-  update_ram(env);
-
-  env->gstate.prev_ram = env->gstate.ram;
-  update_observations(env);
-  clear_visited_coords(env);
-  mark_coord_visited(env);
-  env->unique_coords_count = 1;
-
-  env->rewards[0] = 0;
-  env->terminals[0] = 0;
-  env->step_count = env->frame_count = 0;
-  env->score = 0.0f;
-  env->stagnation = 0;
-  env->unique_coords_count = 1;
-  env->prev_event_sum = calc_event_sum(&env->emu, NULL);
-  // Initialize prev_events to current state without printing
-  for (size_t i = 0; i < EVENT_COUNT; ++i) {
-    uint8_t value = read_mem(&env->emu, EVENT_LIST[i].address);
-    env->prev_events[i] = (value >> EVENT_LIST[i].bit) & 1;
-  }
-
-  for (int i = 0; i < 4; i++)
-    env->emu.core->runFrame(env->emu.core);
-}
-void c_step(PokemonRedEnv *env) {
-  if (!env || !env->emu.core)
-    return;
-  env->rewards[0] = 0;
-  env->terminals[0] = 0;
-  env->step_count++;
-  // batch frame stepping
-  int skip = env->emu.frame_skip > 0 ? env->emu.frame_skip : 1;
-  uint32_t action_key = action_to_key(env->actions[0]);
-  STEP_N_FRAMES(env->emu.core, action_key, skip);
-  env->frame_count += skip;
-
-  //  update_battle_state(&env->gstate.battle, &env->emu);
-  //  if (env->gstate.battle.battle_active) {
-  //    env->step_count++;
-  //  }
-
-  float reward = calculate_rewards(env);
-  update_observations(env);
-  env->rewards[0] = reward;
-  env->score += reward;
-
-  if (env->step_count >= env->max_episode_length) {
-    env->terminals[0] = 1;
-    add_log(env);
-    memcpy(env->prev_visited_coords, env->visited_coords, VISITED_COORDS_SIZE);
-    c_reset(env);
-  }
-}
-void c_render(PokemonRedEnv *env) { mgba_render_frame(&env->emu); }
-void c_close(PokemonRedEnv *env) {
-  if (!env)
-    return;
-
-  mgba_destroy_renderer(&env->emu);
-
-  if (env->emu.core) {
-    env->emu.core->setVideoBuffer(env->emu.core, NULL, 0);
-    mCoreConfigDeinit(&env->emu.core->config);
-    env->emu.core->deinit(env->emu.core);
-    env->emu.core = NULL;
-  }
-
-  if (env->emu.uses_shared_rom) {
-    release_shared_rom();
-    env->emu.uses_shared_rom = false;
-  }
-
-  if (env->emu.video_buffer) {
-    free(env->emu.video_buffer);
-    env->emu.video_buffer = NULL;
-  }
+static inline uint8_t detect_game_mode(mGBA *emu) {
+  if (read_mem(emu, BATTLE_FLAG_ADDR) != 0)
+    return GAME_MODE_BATTLE;
+  return GAME_MODE_GENERAL;
 }
 
 #endif // POKEMONREDENV_H
