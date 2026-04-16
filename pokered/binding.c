@@ -4,8 +4,6 @@
 
 #define Env PokemonRedEnv
 
-static int g_env_init_counter = 0;
-
 static PyObject *vec_get_positions(PyObject *self, PyObject *args);
 
 #define MY_METHODS                                                             \
@@ -32,12 +30,13 @@ static PyObject *vec_get_positions(PyObject *self, PyObject *args) {
 
 static int my_init(Env *env, PyObject *args, PyObject *kwargs) {
   const char *rom_path = NULL;
-  g_env_init_counter++;
   env->emu.frame_skip = unpack(kwargs, "frameskip");
+  env->emu.press_frames = unpack(kwargs, "press_frames");
   env->max_episode_length = unpack(kwargs, "max_episode_length");
   env->emu.render_enabled = !unpack(kwargs, "headless");
   env->full_reset = unpack(kwargs, "full_reset");
   env->disable_wild_until_badge = unpack(kwargs, "disable_wild_until_badge");
+  env->verbose = unpack(kwargs, "verbose");
 
   PyObject *state_path_obj = PyDict_GetItemString(kwargs, "state_path");
   if (state_path_obj && state_path_obj != Py_None) {
@@ -62,7 +61,16 @@ static int my_init(Env *env, PyObject *args, PyObject *kwargs) {
   fclose(rom_file);
 
   mgba_init_core(&env->emu, rom_path);
-  env->visited_coords = (uint8_t *)calloc(VISITED_COORDS_SIZE, sizeof(uint8_t));
+
+  // Tell mGBA PPU to skip rendering all but 1 frame per action step
+  if (env->emu.core && env->emu.frame_skip > 1) {
+    char fs_str[16];
+    snprintf(fs_str, sizeof(fs_str), "%d", env->emu.frame_skip - 1);
+    mCoreConfigSetValue(&env->emu.core->config, "frameskip", fs_str);
+    env->emu.core->reloadConfigOption(env->emu.core, "frameskip", NULL);
+  }
+
+  env->episode_visits = (uint8_t *)calloc(VISITED_COORDS_SIZE, sizeof(uint8_t));
   env->exploration_heatmap =
       (uint16_t *)calloc(VISITED_COORDS_SIZE, sizeof(uint16_t));
   env->unique_coords_count = 0;
@@ -76,8 +84,7 @@ static int my_init(Env *env, PyObject *args, PyObject *kwargs) {
   } else {
     env->heatmap_decay = 0.0f;
   }
-  printf("Initialized environment #%d with ROM: %s\n", g_env_init_counter,
-         rom_path);
+  env->heatmap_decay_interval = env->max_episode_length / 1;
   if (!env->emu.core) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to initialize mGBA core");
     return -1;
@@ -108,6 +115,7 @@ static int my_log(PyObject *dict, Log *log) {
   assign_to_dict(dict, "battles_lost", log->battles_lost);
   assign_to_dict(dict, "battle_steps", log->battle_steps);
   assign_to_dict(dict, "run_attempts", log->run_attempts);
+  assign_to_dict(dict, "battles_fled", log->battles_fled);
   assign_to_dict(dict, "explore_signal", log->explore_signal);
   assign_to_dict(dict, "battle_signal", log->battle_signal);
   assign_to_dict(dict, "events_signal", log->events_signal);

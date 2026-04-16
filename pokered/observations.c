@@ -16,18 +16,18 @@ void update_observations(PokemonRedEnv *env) {
       int src_y = sy * 2;
       int src_x = sx * 2;
 
-      float gray_sum = 0.0f;
+      uint32_t gray_sum = 0;
       for (int dy = 0; dy < 2; dy++) {
         for (int dx = 0; dx < 2; dx++) {
           int src_idx = (src_y + dy) * SCREEN_WIDTH + (src_x + dx);
           color_t pixel = vbuf[src_idx];
-          float r = (float)((pixel >> 16) & 0xFF);
-          float g = (float)((pixel >> 8) & 0xFF);
-          float b = (float)(pixel & 0xFF);
-          gray_sum += 0.299f * r + 0.587f * g + 0.114f * b;
+          uint32_t r = (pixel >> 16) & 0xFF;
+          uint32_t g = (pixel >> 8) & 0xFF;
+          uint32_t b = pixel & 0xFF;
+          gray_sum += r * 77 + g * 150 + b * 29;
         }
       }
-      obs[sy * SCALED_WIDTH + sx] = gray_sum * 0.25f;
+      obs[sy * SCALED_WIDTH + sx] = (float)(gray_sum >> 10);
     }
   }
 
@@ -37,7 +37,7 @@ void update_observations(PokemonRedEnv *env) {
       for (int tx = 0; tx < SCREEN_TILES_X; tx++) {
         int mx = (int)core->x - PLAYER_TILE_X + tx;
         int my = (int)core->y - PLAYER_TILE_Y + ty;
-        if (mx < 0 || my < 0 || mx > 255 || my > 255)
+        if (mx < 0 || my < 0 || mx >= MAX_X || my >= MAX_Y)
           continue;
 
         uint32_t ci = coord_index(map_n, (uint8_t)mx, (uint8_t)my);
@@ -121,7 +121,7 @@ void update_observations(PokemonRedEnv *env) {
         int mx = (int)core->x - PLAYER_TILE_X + tx;
         int my = (int)core->y - PLAYER_TILE_Y + ty;
         int idx = h + ty * SCREEN_TILES_X + tx;
-        if (mx < 0 || my < 0 || mx > 255 || my > 255) {
+        if (mx < 0 || my < 0 || mx >= MAX_X || my >= MAX_Y) {
           obs[idx] = 0.0f;
           continue;
         }

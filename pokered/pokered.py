@@ -22,10 +22,12 @@ run_id = uuid.uuid4().hex[:8]
 class PokemonRed(pufferlib.PufferEnv):
     counter_lock = multiprocessing.Lock()
     counter = multiprocessing.Value('i', 0)
+    c_env_counter = multiprocessing.Value('i', 0)
     def __init__(self, num_envs=1, render_mode=None, headless=False, rom_path=None, state_path=None,
-                 frameskip=4, max_episode_length=20480, continuous=False, log_interval=128,
+                 frameskip=24, press_frames=8, max_episode_length=20480, continuous=False, log_interval=128,
                  stream_enabled=False, stream_user=None, stream_color=None, stream_extra=None, full_reset=True,
-                 stream_interval=500, heatmap_decay=0.0, disable_wild_until_badge=False, buf=None, seed=0):
+                 stream_interval=500, heatmap_decay=0.0, disable_wild_until_badge=False, verbose=False,
+                 buf=None, seed=0):
         with PokemonRed.counter_lock:
             env_id = PokemonRed.counter.value
             PokemonRed.counter.value += 1
@@ -57,9 +59,14 @@ class PokemonRed(pufferlib.PufferEnv):
             self.observations, self.actions, self.rewards,
             self.terminals, self.truncations, num_envs, seed, 
             headless=headless, rom_path=rom_path, state_path=state_path,
-            frameskip=frameskip, max_episode_length=max_episode_length, full_reset=full_reset,
-            heatmap_decay=float(heatmap_decay), disable_wild_until_badge=int(disable_wild_until_badge)
+            frameskip=frameskip, press_frames=press_frames, max_episode_length=max_episode_length, full_reset=full_reset,
+            heatmap_decay=float(heatmap_decay), disable_wild_until_badge=int(disable_wild_until_badge),
+            verbose=int(verbose)
         )
+        with PokemonRed.counter_lock:
+            PokemonRed.c_env_counter.value += num_envs
+            total = PokemonRed.c_env_counter.value
+        print(f"[PokemonRed] Initialized {num_envs} C env(s) — {total} total across all processes", flush=True)
         
         self.stream_enabled = stream_enabled
         self.stream_user = stream_user or "User"

@@ -171,8 +171,9 @@ void c_step(TemplateEnv *env) {
   env->step_count++;
 
   int skip = env->emu.frame_skip > 0 ? env->emu.frame_skip : 1;
+  int press = env->emu.press_frames > 0 ? env->emu.press_frames : skip;
   uint32_t action_key = action_to_key(env->actions[0]);
-  STEP_N_FRAMES(env->emu.core, action_key, skip);
+  STEP_ACTION_FRAMES(env->emu.core, action_key, press, skip);
   env->frame_count += skip;
 
   float reward = calculate_rewards(env);

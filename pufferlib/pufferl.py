@@ -960,6 +960,8 @@ def train(env_name, args=None, vecenv=None, policy=None, logger=None):
 def eval(env_name, args=None, vecenv=None, policy=None):
     args = args or load_config(env_name)
     backend = args['vec']['backend']
+    args['env']['headless'] = False
+    args['env']['num_envs'] = 1
     if backend != 'PufferEnv':
         backend = 'Serial'
 
@@ -995,6 +997,8 @@ def eval(env_name, args=None, vecenv=None, policy=None):
             action = np.clip(action, vecenv.action_space.low, vecenv.action_space.high)
 
         ob = vecenv.step(action)[0]
+        print(action)
+        time.sleep(0.1)
 
         if len(frames) > 0 and len(frames) == args['save_frames']:
             import imageio

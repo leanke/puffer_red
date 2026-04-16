@@ -79,12 +79,12 @@ class VizCapture:
 
 
 class PokemonRedLSTM(pufferlib.models.LSTMWrapper):
-    def __init__(self, env, policy, input_size=256, hidden_size=256):
+    def __init__(self, env, policy, input_size=128, hidden_size=128):
         super().__init__(env, policy, input_size, hidden_size)
 
 
 class PokemonRed(nn.Module):
-    def __init__(self, env, framestack=1, hidden_size=256,
+    def __init__(self, env, framestack=1, hidden_size=128,
                  capture_viz=False, capture_interval=100,
                  capture_dir="viz_data", capture_mode="light",
                  capture_flush=1000, **kwargs):
@@ -280,8 +280,18 @@ class PokemonRed(nn.Module):
         # [30:32] game_mode: one-hot [general, battle]
         # [32:122] heatmap: 10×9 tile visit counts (row-major)
         ram_flat = observations[:, 72*80*1:]
+
+        # resolve game mode first for conditional gradient gating
+        mode_onehot = ram_flat[:, 30:32].float()
+        mode_net = self.mode_emb(mode_onehot)
+        self._mode_idx = mode_onehot.argmax(dim=1).long()
+        is_general = mode_onehot[:, 0:1].bool()  # (batch, 1)
+        is_battle = mode_onehot[:, 1:2].bool()
+
         coords = ram_flat[:, 0:3].float() / 255.0
         coord_net = self.coord_emb(coords)
+        coord_net = torch.where(is_general, coord_net, coord_net.detach())
+
         badge = ram_flat[:, 3:4].float() / 8.0
         party_size = ram_flat[:, 4:5].float() / 6.0
         in_battle = ram_flat[:, 5:6].float()
@@ -289,16 +299,20 @@ class PokemonRed(nn.Module):
         facing = ram_flat[:, 7:8].float() / 3.0
         menu_raw = ram_flat[:, 8:14].float() / 255.0
         menu_net = self.menu_emb(menu_raw)
+
         battle_raw = ram_flat[:, 14:23].float() / 255.0
         battle_net = self.battle_emb(battle_raw)
+        battle_net = torch.where(is_battle, battle_net, battle_net.detach())
+
         map_raw = ram_flat[:, 23:30].float() / 255.0
         map_net = self.map_emb(map_raw)
-        mode_onehot = ram_flat[:, 30:32].float()
-        mode_net = self.mode_emb(mode_onehot)
-        self._mode_idx = mode_onehot.argmax(dim=1).long()
+        map_net = torch.where(is_general, map_net, map_net.detach())
+
         heatmap_raw = ram_flat[:, 32:122].float()
         heatmap_norm = torch.log1p(heatmap_raw) / 11.0
         heatmap_net = self.heatmap_emb(heatmap_norm)
+        heatmap_net = torch.where(is_general, heatmap_net, heatmap_net.detach())
+
         ram_cat = torch.cat([coord_net, menu_net, battle_net, map_net,
                              heatmap_net, mode_net,
                              badge, party_size, in_battle, hp_fraction, facing], dim=1)

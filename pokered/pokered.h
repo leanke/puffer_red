@@ -66,15 +66,15 @@
 #define VIRIDIAN_SCRIPT_ADDR    0xD5F4
 #define BATTLE_TYPE_OLD_MAN     0x02
 
-#define WEIGHT_BATTLE      0.15f
-#define WEIGHT_EXPLORATION 0.40f
-#define WEIGHT_EVENTS      0.15f
-#define WEIGHT_LEVELING    0.15f
-#define WEIGHT_MILESTONES  0.25f
+#define WEIGHT_BATTLE      0.02f
+#define WEIGHT_EXPLORATION 1.00f
+#define WEIGHT_EVENTS      0.30f
+#define WEIGHT_LEVELING    0.10f
+#define WEIGHT_MILESTONES  0.50f
 
 #define MAX_MAPS 256
-#define MAX_X 256
-#define MAX_Y 256
+#define MAX_X 128
+#define MAX_Y 128
 #define VISITED_COORDS_SIZE (MAX_MAPS * MAX_X * MAX_Y)
 
 typedef struct {
@@ -98,6 +98,7 @@ typedef struct {
   float battles_lost;
   float battle_steps;
   float run_attempts;
+  float battles_fled;
   float explore_signal;
   float battle_signal;
   float events_signal;
@@ -132,6 +133,7 @@ typedef struct {
   uint32_t battle_steps;
   uint16_t battles_won;
   uint16_t battles_lost;
+  uint16_t battles_fled;
   uint16_t run_attempts;
 } EpisodeStats;
 
@@ -145,7 +147,7 @@ typedef struct {
   float *rewards;
   unsigned char *terminals;
   unsigned char *truncations;
-  uint8_t *visited_coords;
+  uint8_t *episode_visits;
   uint16_t *exploration_heatmap;
   uint8_t *prev_events;
 
@@ -158,19 +160,21 @@ typedef struct {
   uint32_t unique_coords_count;
   float score;
   float heatmap_decay;
+  int32_t heatmap_decay_interval;
   float prev_party_hp_frac;
   int prev_action;
   uint8_t game_mode;
 
   bool full_reset;
   bool disable_wild_until_badge;
+  bool verbose;
 } PokemonRedEnv;
 
 void update_observations(PokemonRedEnv *env);
 void update_core_state(PokemonRedEnv *env);
 
 int calc_level_sum(CoreState *core);
-int calc_event_sum(mGBA *emu, uint8_t *prev_events);
+int calc_event_sum(mGBA *emu, uint8_t *prev_events, bool verbose);
 float calculate_rewards(PokemonRedEnv *env);
 
 void allocate(PokemonRedEnv *env);
@@ -182,28 +186,10 @@ void c_render(PokemonRedEnv *env);
 void c_close(PokemonRedEnv *env);
 
 static inline uint32_t coord_index(uint8_t map, uint8_t x, uint8_t y) {
-  return ((uint32_t)map << 16) | ((uint32_t)x << 8) | (uint32_t)y;
+  uint32_t cx = x < MAX_X ? x : MAX_X - 1;
+  uint32_t cy = y < MAX_Y ? y : MAX_Y - 1;
+  return (uint32_t)map * (MAX_X * MAX_Y) + cx * MAX_Y + cy;
 }
-static inline bool is_coord_visited(PokemonRedEnv *env) {
-  if (!env || !env->visited_coords)
-    return false;
-  if (env->gstate.core.idx >= VISITED_COORDS_SIZE)
-    return false;
-  return env->visited_coords[env->gstate.core.idx];
-}
-static inline void mark_coord_visited(PokemonRedEnv *env) {
-  if (!env || !env->visited_coords)
-    return;
-  if (env->gstate.core.idx >= VISITED_COORDS_SIZE)
-    return;
-  env->visited_coords[env->gstate.core.idx] = 1;
-}
-static inline void clear_visited_coords(PokemonRedEnv *env) {
-  if (env && env->visited_coords) {
-    memset(env->visited_coords, 0, VISITED_COORDS_SIZE);
-  }
-}
-
 static inline bool is_directional_action(int action) {
   return action >= MGBA_ACTION_RIGHT && action <= MGBA_ACTION_DOWN;
 }

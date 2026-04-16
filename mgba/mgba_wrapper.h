@@ -29,6 +29,7 @@ typedef struct {
   char rom_path[256];
   char state_path[256];
   int32_t frame_skip;
+  int32_t press_frames;
   bool render_enabled;
   bool uses_shared_rom;
   SDL_Window *window;
@@ -415,12 +416,28 @@ static void mgba_init_core(mGBA *env, const char *rom_path) {
   mCoreConfigSetValue(&env->core->config, "sgb.borders", "0");
   mCoreConfigSetValue(&env->core->config, "gb.model", "DMG");
   env->core->loadConfig(env->core, &env->core->config);
-  if (!mCoreLoadFile(env->core, rom_path)) {
-    fprintf(stderr, "Failed to load ROM: %s\n", rom_path);
-    env->core->deinit(env->core);
-    env->core = NULL;
-    return;
+
+  // Try shared ROM: one read per process, all envs share the buffer
+  bool rom_loaded = false;
+  if (acquire_shared_rom(rom_path)) {
+    struct VFile *vf = VFileFromConstMemory(g_shared_rom_data, g_shared_rom_size);
+    if (vf && env->core->loadROM(env->core, vf)) {
+      env->uses_shared_rom = true;
+      rom_loaded = true;
+    } else {
+      if (vf) vf->close(vf);
+      release_shared_rom();
+    }
   }
+  if (!rom_loaded) {
+    if (!mCoreLoadFile(env->core, rom_path)) {
+      fprintf(stderr, "Failed to load ROM: %s\n", rom_path);
+      env->core->deinit(env->core);
+      env->core = NULL;
+      return;
+    }
+  }
+
   unsigned int w, h;
   env->core->desiredVideoDimensions(env->core, &w, &h);
   env->video_buffer = (color_t *)calloc(w * h + 256, sizeof(color_t));

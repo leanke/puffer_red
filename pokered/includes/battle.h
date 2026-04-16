@@ -61,6 +61,10 @@ static inline bool battle_was_lost(mGBA *emu) {
   return read_mem(emu, BATTLE_RESULT_ADDR) == 1;
 }
 
+static inline bool battle_was_fled(mGBA *emu) {
+  return read_mem(emu, BATTLE_RESULT_ADDR) == 2;
+}
+
 static inline float party_hp_fraction(mGBA *emu) {
   uint8_t count = read_mem(emu, PARTY_COUNT_ADDR);
   if (count == 0 || count > 6) return 1.0f;

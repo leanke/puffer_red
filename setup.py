@@ -54,11 +54,15 @@ if DEBUG:
     ]
 else:
     extra_compile_args += [
-        '-O2',
+        '-O3',
         '-flto',
+        '-march=native',
+        '-ffast-math',
+        '-funroll-loops',
     ]
     extra_link_args += [
-        '-O2',
+        '-O3',
+        '-flto',
     ]
     cxx_args += [
         '-O3',
@@ -146,7 +150,23 @@ def configure_mgba_extension(c_ext):
     """Configure a C extension that uses the shared mGBA abstraction layer."""
     print(f"Configuring {c_ext.name} with mGBA library")
     c_ext.extra_objects = []
-    c_ext.include_dirs.append('/usr/include/mgba')
+
+    # Check for local mGBA fork first, fall back to system libmgba
+    mgba_lib_dir = os.environ.get('MGBA_LIB_DIR',
+        os.path.expanduser('~/loft/puffer/mgba/install'))
+
+    if os.path.isfile(os.path.join(mgba_lib_dir, 'lib', 'libmgba.so')):
+        print(f"  Using local mGBA fork: {mgba_lib_dir}")
+        c_ext.include_dirs.append(os.path.join(mgba_lib_dir, 'include'))
+        c_ext.include_dirs.append(os.path.join(mgba_lib_dir, 'include', 'mgba'))
+        c_ext.library_dirs = getattr(c_ext, 'library_dirs', []) + [
+            os.path.join(mgba_lib_dir, 'lib')]
+        c_ext.runtime_library_dirs = getattr(c_ext, 'runtime_library_dirs', []) + [
+            os.path.join(mgba_lib_dir, 'lib')]
+    else:
+        print(f"  Using system mGBA (no local fork at {mgba_lib_dir})")
+        c_ext.include_dirs.append('/usr/include/mgba')
+
     c_ext.include_dirs.append('mgba')
     c_ext.extra_compile_args.append('-DENABLE_VFS')
     # Link against mGBA/SDL2 - use pkg-config for SDL flags when available

@@ -29,9 +29,23 @@ endif
 # Shared mGBA abstraction layer
 MGBA_DIR := mgba
 
+# Local mGBA fork (set to use custom build, or leave empty for system libmgba)
+# Build with: cd ~/loft/puffer/mgba && ./build.sh install
+MGBA_LIB_DIR ?= $(HOME)/loft/puffer/mgba/install
+
+ifneq ($(wildcard $(MGBA_LIB_DIR)/lib/libmgba.so),)
+    MGBA_CFLAGS := -I$(MGBA_LIB_DIR)/include -I$(MGBA_LIB_DIR)/include/mgba
+    MGBA_LDFLAGS := -L$(MGBA_LIB_DIR)/lib -Wl,-rpath,$(MGBA_LIB_DIR)/lib -lmgba
+    $(info Using local mGBA fork: $(MGBA_LIB_DIR))
+else
+    MGBA_CFLAGS :=
+    MGBA_LDFLAGS := -lmgba
+    $(info Using system mGBA)
+endif
+
 # CFLAGS/LDFLAGS used only for the standalone play target
-CFLAGS := -DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION -DPLATFORM_DESKTOP -I$(NUMPY_INCLUDE) -I$(MGBA_DIR) -Wno-alloc-size-larger-than -Wno-implicit-function-declaration -fmax-errors=3 $(OPT_FLAGS) -DENABLE_VFS
-LDFLAGS := -fwrapv -Bsymbolic-functions $(LINK_OPT_FLAGS) -lmgba
+CFLAGS := -DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION -DPLATFORM_DESKTOP -I$(NUMPY_INCLUDE) -I$(MGBA_DIR) $(MGBA_CFLAGS) -Wno-alloc-size-larger-than -Wno-implicit-function-declaration -fmax-errors=3 $(OPT_FLAGS) -DENABLE_VFS
+LDFLAGS := -fwrapv -Bsymbolic-functions $(LINK_OPT_FLAGS) $(MGBA_LDFLAGS)
 
 .PHONY: all clean help pokered play
 

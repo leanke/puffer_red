@@ -14,7 +14,7 @@ void free_allocated(PokemonRedEnv *env) {
   free(env->rewards);
   free(env->terminals);
   free(env->truncations);
-  free(env->visited_coords);
+  free(env->episode_visits);
   free(env->exploration_heatmap);
   free(env->prev_events);
 }
@@ -39,6 +39,7 @@ void add_log(PokemonRedEnv *env) {
 
   env->log.battles_won = env->stats.battles_won;
   env->log.battles_lost = env->stats.battles_lost;
+  env->log.battles_fled = env->stats.battles_fled;
   env->log.battle_steps = env->stats.battle_steps;
   env->log.run_attempts = env->stats.run_attempts;
 
@@ -53,25 +54,24 @@ void add_log(PokemonRedEnv *env) {
 void c_reset(PokemonRedEnv *env) {
   if (!env || !env->emu.core)
     return;
-  //  if (env->full_reset) {
-  //    initial_load_state(&env->emu, env->emu.state_path);
-  //  }
+  if (env->full_reset) {
+    initial_load_state(&env->emu, env->emu.state_path);
+  }
   update_core_state(env);
 
   env->gstate.prev_core = env->gstate.core;
   update_battle_state(&env->gstate.battle, &env->emu);
   env->gstate.prev_battle = env->gstate.battle;
   update_observations(env);
-  clear_visited_coords(env);
-  mark_coord_visited(env);
-  env->unique_coords_count = 1;
+  memset(env->episode_visits, 0, VISITED_COORDS_SIZE);
+  env->unique_coords_count = 0;
 
   env->rewards[0] = 0;
   env->terminals[0] = 0;
   env->step_count = env->frame_count = 0;
   env->score = 0.0f;
   env->prev_action = MGBA_ACTION_NOOP;
-  env->prev_event_sum = calc_event_sum(&env->emu, NULL);
+  env->prev_event_sum = calc_event_sum(&env->emu, NULL, false);
   env->prev_party_hp_frac = party_hp_fraction(&env->emu);
   env->game_mode = detect_game_mode(&env->emu);
   memset(&env->stats, 0, sizeof(EpisodeStats));
@@ -108,10 +108,11 @@ void c_step(PokemonRedEnv *env) {
     write_mem(&env->emu, BATTLE_TYPE_ADDR, 0);
   }
 
-  int skip = env->emu.frame_skip > 0 ? env->emu.frame_skip : 1;
+  int skip = env->emu.frame_skip > 0 ? env->emu.frame_skip : 24;
+  int press = env->emu.press_frames > 0 ? env->emu.press_frames : 8;
   env->prev_action = env->actions[0];
   uint32_t action_key = action_to_key(env->actions[0]);
-  STEP_N_FRAMES(env->emu.core, action_key, skip);
+  STEP_ACTION_FRAMES(env->emu.core, action_key, press, skip);
   env->frame_count += skip;
 
   float reward = calculate_rewards(env);
@@ -123,16 +124,18 @@ void c_step(PokemonRedEnv *env) {
   if (env->game_mode == GAME_MODE_BATTLE)
     env->stats.battle_steps++;
 
+  if (env->heatmap_decay > 0.0f && env->heatmap_decay_interval > 0 &&
+      env->step_count % env->heatmap_decay_interval == 0) {
+    float keep = 1.0f - env->heatmap_decay;
+    for (size_t i = 0; i < VISITED_COORDS_SIZE; i++) {
+      env->exploration_heatmap[i] =
+          (uint16_t)((float)env->exploration_heatmap[i] * keep);
+    }
+  }
+
   if (env->step_count >= env->max_episode_length) {
     env->terminals[0] = 1;
     add_log(env);
-    if (env->heatmap_decay > 0.0f) {
-      float keep = 1.0f - env->heatmap_decay;
-      for (size_t i = 0; i < VISITED_COORDS_SIZE; i++) {
-        env->exploration_heatmap[i] =
-            (uint16_t)((float)env->exploration_heatmap[i] * keep);
-      }
-    }
     c_reset(env);
   }
 }
