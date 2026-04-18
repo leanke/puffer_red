@@ -16,6 +16,7 @@ from torch.utils.cpp_extension import (
     CppExtension,
     CUDAExtension,
     BuildExtension,
+    CUDA_HOME,
 )
 
 # Build with DEBUG=1 to enable debug symbols
@@ -23,104 +24,109 @@ DEBUG = os.getenv("DEBUG", "0") == "1"
 
 # Shared compile args for all platforms
 extra_compile_args = [
-    '-DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION',
+    "-DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION",
+    "-fopenmp",
 ]
-extra_link_args = [
-    '-fwrapv'
-]
+extra_link_args = ["-fwrapv", "-fopenmp"]
 cxx_args = [
-    '-fdiagnostics-color=always',
+    "-fdiagnostics-color=always",
 ]
 nvcc_args = []
 
 if DEBUG:
     extra_compile_args += [
-        '-O0',
-        '-g',
-        '-fsanitize=address,undefined,bounds,pointer-overflow,leak',
-        '-fno-omit-frame-pointer',
+        "-O0",
+        "-g",
+        "-fsanitize=address,undefined,bounds,pointer-overflow,leak",
+        "-fno-omit-frame-pointer",
     ]
     extra_link_args += [
-        '-g',
-        '-fsanitize=address,undefined,bounds,pointer-overflow,leak',
+        "-g",
+        "-fsanitize=address,undefined,bounds,pointer-overflow,leak",
     ]
     cxx_args += [
-        '-O0',
-        '-g',
+        "-O0",
+        "-g",
     ]
     nvcc_args += [
-        '-O0',
-        '-g',
+        "-O0",
+        "-g",
     ]
 else:
     extra_compile_args += [
-        '-O3',
-        '-flto',
-        '-march=native',
-        '-ffast-math',
-        '-funroll-loops',
+        "-O3",
+        "-flto",
+        "-march=native",
+        "-ffast-math",
+        "-funroll-loops",
     ]
     extra_link_args += [
-        '-O3',
-        '-flto',
+        "-O3",
+        "-flto",
     ]
     cxx_args += [
-        '-O3',
+        "-O3",
     ]
     nvcc_args += [
-        '-O3',
+        "-O3",
     ]
 
 system = platform.system()
-if system == 'Linux':
+if system == "Linux":
     extra_compile_args += [
-        '-Wno-alloc-size-larger-than',
-        '-Wno-implicit-function-declaration',
-        '-fmax-errors=3',
+        "-Wno-alloc-size-larger-than",
+        "-Wno-implicit-function-declaration",
+        "-fmax-errors=3",
     ]
     extra_link_args += [
-        '-Bsymbolic-functions',
+        "-Bsymbolic-functions",
     ]
-elif system == 'Darwin':
+elif system == "Darwin":
     extra_compile_args += [
-        '-Wno-error=int-conversion',
-        '-Wno-error=incompatible-function-pointer-types',
-        '-Wno-error=implicit-function-declaration',
+        "-Wno-error=int-conversion",
+        "-Wno-error=incompatible-function-pointer-types",
+        "-Wno-error=implicit-function-declaration",
     ]
     extra_link_args += [
-        '-framework', 'Cocoa',
-        '-framework', 'OpenGL',
-        '-framework', 'IOKit',
+        "-framework",
+        "Cocoa",
+        "-framework",
+        "OpenGL",
+        "-framework",
+        "IOKit",
     ]
 else:
-    raise ValueError(f'Unsupported system: {system}')
+    raise ValueError(f"Unsupported system: {system}")
 
 
-# Extensions 
+# Extensions
 class BuildExt(build_ext):
     def run(self):
         # Propagate any build_ext options (e.g., --inplace, --force) to subcommands
-        build_ext_opts = self.distribution.command_options.get('build_ext', {})
+        build_ext_opts = self.distribution.command_options.get("build_ext", {})
         if build_ext_opts:
             # Copy flags so build_torch and build_c respect inplace/force
-            self.distribution.command_options['build_torch'] = build_ext_opts.copy()
-            self.distribution.command_options['build_c'] = build_ext_opts.copy()
+            self.distribution.command_options["build_torch"] = build_ext_opts.copy()
+            self.distribution.command_options["build_c"] = build_ext_opts.copy()
 
         # Run the torch and C builds (which will handle copying when inplace is set)
-        self.run_command('build_torch')
-        self.run_command('build_c')
+        self.run_command("build_torch")
+        self.run_command("build_c")
+
 
 class CBuildExt(build_ext):
     def run(self, *args, **kwargs):
         self.extensions = [e for e in self.extensions if e.name != "pufferlib._C"]
         super().run(*args, **kwargs)
 
+
 class TorchBuildExt(cpp_extension.BuildExtension):
     def run(self):
         self.extensions = [e for e in self.extensions if e.name == "pufferlib._C"]
         super().run()
 
-INCLUDE = [numpy.get_include(), 'mgba']
+
+INCLUDE = [numpy.get_include(), "mgba"]
 extension_kwargs = dict(
     include_dirs=INCLUDE,
     extra_compile_args=extra_compile_args,
@@ -130,21 +136,24 @@ extension_kwargs = dict(
 # Find C extensions for pokered
 c_extensions = []
 
-c_extension_paths = glob.glob('*/binding.c', recursive=True)
+c_extension_paths = glob.glob("*/binding.c", recursive=True)
 c_extensions = []
 for path in c_extension_paths:
     game_dir = os.path.dirname(path)
     game_name = os.path.basename(game_dir)
     # Collect implementation .c files (exclude binding.c and standalone player)
-    impl_sources = sorted(glob.glob(os.path.join(game_dir, '*.c')))
-    excluded = {os.path.basename(path), f'{game_name}.c'}
+    impl_sources = sorted(glob.glob(os.path.join(game_dir, "*.c")))
+    excluded = {os.path.basename(path), f"{game_name}.c"}
     impl_sources = [s for s in impl_sources if os.path.basename(s) not in excluded]
-    c_extensions.append(Extension(
-        path.rstrip('.c').replace('/', '.'),
-        sources=[path] + impl_sources,
-        **extension_kwargs,
-    ))
-c_extension_paths = [os.path.join(*path.split('/')[:-1]) for path in c_extension_paths]
+    c_extensions.append(
+        Extension(
+            path.rstrip(".c").replace("/", "."),
+            sources=[path] + impl_sources,
+            **extension_kwargs,
+        )
+    )
+c_extension_paths = [os.path.join(*path.split("/")[:-1]) for path in c_extension_paths]
+
 
 def configure_mgba_extension(c_ext):
     """Configure a C extension that uses the shared mGBA abstraction layer."""
@@ -152,38 +161,46 @@ def configure_mgba_extension(c_ext):
     c_ext.extra_objects = []
 
     # Check for local mGBA fork first, fall back to system libmgba
-    mgba_lib_dir = os.environ.get('MGBA_LIB_DIR',
-        os.path.expanduser('~/loft/puffer/mgba/install'))
+    mgba_lib_dir = os.environ.get(
+        "MGBA_LIB_DIR", os.path.expanduser("~/loft/puffer/mgba/install")
+    )
 
-    if os.path.isfile(os.path.join(mgba_lib_dir, 'lib', 'libmgba.so')):
+    if os.path.isfile(os.path.join(mgba_lib_dir, "lib", "libmgba.so")):
         print(f"  Using local mGBA fork: {mgba_lib_dir}")
-        c_ext.include_dirs.append(os.path.join(mgba_lib_dir, 'include'))
-        c_ext.include_dirs.append(os.path.join(mgba_lib_dir, 'include', 'mgba'))
-        c_ext.library_dirs = getattr(c_ext, 'library_dirs', []) + [
-            os.path.join(mgba_lib_dir, 'lib')]
-        c_ext.runtime_library_dirs = getattr(c_ext, 'runtime_library_dirs', []) + [
-            os.path.join(mgba_lib_dir, 'lib')]
+        c_ext.include_dirs.append(os.path.join(mgba_lib_dir, "include"))
+        c_ext.include_dirs.append(os.path.join(mgba_lib_dir, "include", "mgba"))
+        c_ext.library_dirs = getattr(c_ext, "library_dirs", []) + [
+            os.path.join(mgba_lib_dir, "lib")
+        ]
+        c_ext.runtime_library_dirs = getattr(c_ext, "runtime_library_dirs", []) + [
+            os.path.join(mgba_lib_dir, "lib")
+        ]
     else:
         print(f"  Using system mGBA (no local fork at {mgba_lib_dir})")
-        c_ext.include_dirs.append('/usr/include/mgba')
+        c_ext.include_dirs.append("/usr/include/mgba")
 
-    c_ext.include_dirs.append('mgba')
-    c_ext.extra_compile_args.append('-DENABLE_VFS')
+    c_ext.include_dirs.append("mgba")
+    c_ext.extra_compile_args.append("-DENABLE_VFS")
     # Link against mGBA/SDL2 - use pkg-config for SDL flags when available
     try:
-        sdl_cflags = subprocess.check_output([
-            'pkg-config', '--cflags', 'sdl2'
-        ], text=True).strip().split()
-        sdl_libs = subprocess.check_output([
-            'pkg-config', '--libs', 'sdl2'
-        ], text=True).strip().split()
+        sdl_cflags = (
+            subprocess.check_output(["pkg-config", "--cflags", "sdl2"], text=True)
+            .strip()
+            .split()
+        )
+        sdl_libs = (
+            subprocess.check_output(["pkg-config", "--libs", "sdl2"], text=True)
+            .strip()
+            .split()
+        )
     except (subprocess.CalledProcessError, FileNotFoundError):
-        sdl_cflags = ['-I/usr/include/SDL2', '-D_REENTRANT']
-        sdl_libs = ['-lSDL2']
+        sdl_cflags = ["-I/usr/include/SDL2", "-D_REENTRANT"]
+        sdl_libs = ["-lSDL2"]
 
     c_ext.extra_compile_args.extend(flag for flag in sdl_cflags if flag)
-    c_ext.extra_link_args.extend(['-lmgba'])
+    c_ext.extra_link_args.extend(["-lmgba"])
     c_ext.extra_link_args.extend(flag for flag in sdl_libs if flag)
+
 
 # Game modules that use the mGBA abstraction layer
 MGBA_GAME_MODULES = ["pokered", "template"]
@@ -192,10 +209,8 @@ for c_ext in c_extensions:
     if any(name in c_ext.name for name in MGBA_GAME_MODULES):
         configure_mgba_extension(c_ext)
         # Add game-specific include dirs
-        game_dir = c_ext.name.rsplit('.', 1)[0]
-        c_ext.include_dirs.append(os.path.join(game_dir, 'includes'))
-
-
+        game_dir = c_ext.name.rsplit(".", 1)[0]
+        c_ext.include_dirs.append(os.path.join(game_dir, "includes"))
 
 
 # Check if CUDA compiler is available. You need cuda dev, not just runtime.
@@ -210,31 +225,32 @@ else:
     extension = CppExtension
 
 torch_extensions = [
-   extension(
+    extension(
         "pufferlib._C",
         torch_sources,
-        extra_compile_args = {
+        extra_compile_args={
             "cxx": cxx_args,
             "nvcc": nvcc_args,
-        }
+        },
     ),
 ]
 
 # Prevent Conda from injecting garbage compile flags
 from distutils.sysconfig import get_config_vars
+
 cfg_vars = get_config_vars()
-for key in ('CC', 'CXX', 'LDSHARED'):
+for key in ("CC", "CXX", "LDSHARED"):
     if cfg_vars[key]:
-        cfg_vars[key] = cfg_vars[key].replace('-B /root/anaconda3/compiler_compat', '')
-        cfg_vars[key] = cfg_vars[key].replace('-pthread', '')
-        cfg_vars[key] = cfg_vars[key].replace('-fno-strict-overflow', '')
+        cfg_vars[key] = cfg_vars[key].replace("-B /root/anaconda3/compiler_compat", "")
+        cfg_vars[key] = cfg_vars[key].replace("-pthread", "")
+        cfg_vars[key] = cfg_vars[key].replace("-fno-strict-overflow", "")
 
 for key, value in cfg_vars.items():
-    if value and '-fno-strict-overflow' in str(value):
-        cfg_vars[key] = value.replace('-fno-strict-overflow', '')
+    if value and "-fno-strict-overflow" in str(value):
+        cfg_vars[key] = value.replace("-fno-strict-overflow", "")
 
 # Find all package directories
-packages = ['pufferlib', 'pufferlib.extensions', 'pokered']
+packages = ["pufferlib", "pufferlib.extensions", "pokered"]
 
 setup(
     name="pokemon_red_rl",
@@ -243,7 +259,7 @@ setup(
     packages=packages,
     include_package_data=True,
     package_data={
-        'pokered': ['states/*.state', 'states/*.ss1', 'include/*.h'],
+        "pokered": ["states/*.state", "states/*.ss1", "include/*.h"],
     },
     ext_modules=c_extensions + torch_extensions,
     cmdclass={

@@ -31,7 +31,8 @@ MGBA_DIR := mgba
 
 # Local mGBA fork (set to use custom build, or leave empty for system libmgba)
 # Build with: cd ~/loft/puffer/mgba && ./build.sh install
-MGBA_LIB_DIR ?= $(HOME)/loft/puffer/mgba/install
+MGBA_LIB_DIR ?= /user/include/mgba
+# $(HOME)/loft/puffer/mgba/install
 
 ifneq ($(wildcard $(MGBA_LIB_DIR)/lib/libmgba.so),)
     MGBA_CFLAGS := -I$(MGBA_LIB_DIR)/include -I$(MGBA_LIB_DIR)/include/mgba
@@ -44,8 +45,8 @@ else
 endif
 
 # CFLAGS/LDFLAGS used only for the standalone play target
-CFLAGS := -DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION -DPLATFORM_DESKTOP -I$(NUMPY_INCLUDE) -I$(MGBA_DIR) $(MGBA_CFLAGS) -Wno-alloc-size-larger-than -Wno-implicit-function-declaration -fmax-errors=3 $(OPT_FLAGS) -DENABLE_VFS
-LDFLAGS := -fwrapv -Bsymbolic-functions $(LINK_OPT_FLAGS) $(MGBA_LDFLAGS)
+CFLAGS := -DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION -DPLATFORM_DESKTOP -I$(NUMPY_INCLUDE) -I$(MGBA_DIR) $(MGBA_CFLAGS) -Wno-alloc-size-larger-than -Wno-implicit-function-declaration -fmax-errors=3 $(OPT_FLAGS) -DENABLE_VFS -fopenmp
+LDFLAGS := -fwrapv -Bsymbolic-functions $(LINK_OPT_FLAGS) $(MGBA_LDFLAGS) -fopenmp
 
 .PHONY: all clean help pokered play
 
@@ -71,8 +72,14 @@ clean:
 	@rm -f $(POKERED_PLAY_BIN)
 
 install-deps:
-	@echo "Installing mGBA development libraries..."
-	sudo apt-get update && sudo apt-get install -y libmgba0.10t64 libmgba-dev
+	@echo "Cloning and installing mgba..."
+	git clone https://github.com/mgba-emu/mgba.git
+	cd mgba
+	git checkout 0.10.2
+	mkdir build && cd build
+	cmake ..
+	make
+	sudo make install
 
 help:
 	@echo "Pokemon Red RL Makefile"

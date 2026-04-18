@@ -1,5 +1,6 @@
 #include <Python.h>
 #include <numpy/arrayobject.h>
+#include <omp.h>
 
 // Forward declarations for env-specific functions supplied by user
 static int my_log(PyObject* dict, Log* log);
@@ -260,6 +261,7 @@ static PyObject* env_put(PyObject* self, PyObject* args, PyObject* kwargs) {
 typedef struct {
     Env** envs;
     int num_envs;
+    int omp_threads;
 } VecEnv;
 
 static VecEnv* unpack_vecenv(PyObject* args) {
@@ -309,6 +311,14 @@ static PyObject* vec_init(PyObject* self, PyObject* args, PyObject* kwargs) {
     if (!vec->envs) {
         PyErr_SetString(PyExc_MemoryError, "Failed to allocate vec env");
         return NULL;
+    }
+
+    PyObject* omp_obj = kwargs ? PyDict_GetItemString(kwargs, "omp_threads") : NULL;
+    if (omp_obj && omp_obj != Py_None && PyLong_Check(omp_obj)) {
+        vec->omp_threads = (int)PyLong_AsLong(omp_obj);
+        if (vec->omp_threads < 1) vec->omp_threads = 1;
+    } else {
+        vec->omp_threads = num_envs;
     }
 
     PyObject* seed_obj = PyTuple_GetItem(args, 6);
@@ -463,6 +473,7 @@ static PyObject* vectorize(PyObject* self, PyObject* args) {
     }
 
     vec->num_envs = num_envs;
+    vec->omp_threads = num_envs;
     for (int i = 0; i < num_envs; i++) {
         PyObject* handle_obj = PyTuple_GetItem(args, i);
         if (!PyObject_TypeCheck(handle_obj, &PyLong_Type)) {
@@ -493,11 +504,20 @@ static PyObject* vec_reset(PyObject* self, PyObject* args) {
     }
     int seed = PyLong_AsLong(seed_arg);
  
-    for (int i = 0; i < vec->num_envs; i++) {
-        // Assumes each process has the same number of environments
-        srand(i + seed*vec->num_envs);
-        c_reset(vec->envs[i]);
+    int num = vec->num_envs;
+    int threads = vec->omp_threads;
+    Env** envs = vec->envs;
+
+    for (int i = 0; i < num; i++)
+        srand(i + seed*num);
+
+    Py_BEGIN_ALLOW_THREADS
+    omp_set_num_threads(threads);
+    #pragma omp parallel for schedule(dynamic)
+    for (int i = 0; i < num; i++) {
+        c_reset(envs[i]);
     }
+    Py_END_ALLOW_THREADS
     Py_RETURN_NONE;
 }
 
@@ -513,9 +533,17 @@ static PyObject* vec_step(PyObject* self, PyObject* arg) {
         return NULL;
     }
 
-    for (int i = 0; i < vec->num_envs; i++) {
-        c_step(vec->envs[i]);
+    int num = vec->num_envs;
+    int threads = vec->omp_threads;
+    Env** envs = vec->envs;
+
+    Py_BEGIN_ALLOW_THREADS
+    omp_set_num_threads(threads);
+    #pragma omp parallel for schedule(dynamic)
+    for (int i = 0; i < num; i++) {
+        c_step(envs[i]);
     }
+    Py_END_ALLOW_THREADS
     Py_RETURN_NONE;
 }
 

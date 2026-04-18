@@ -27,7 +27,7 @@ class PokemonRed(pufferlib.PufferEnv):
                  frameskip=24, press_frames=8, max_episode_length=20480, continuous=False, log_interval=128,
                  stream_enabled=False, stream_user=None, stream_color=None, stream_extra=None, full_reset=True,
                  stream_interval=500, heatmap_decay=0.0, disable_wild_until_badge=False, verbose=False,
-                 buf=None, seed=0):
+                 omp_threads=None, buf=None, seed=0):
         with PokemonRed.counter_lock:
             env_id = PokemonRed.counter.value
             PokemonRed.counter.value += 1
@@ -61,7 +61,7 @@ class PokemonRed(pufferlib.PufferEnv):
             headless=headless, rom_path=rom_path, state_path=state_path,
             frameskip=frameskip, press_frames=press_frames, max_episode_length=max_episode_length, full_reset=full_reset,
             heatmap_decay=float(heatmap_decay), disable_wild_until_badge=int(disable_wild_until_badge),
-            verbose=int(verbose)
+            verbose=int(verbose), omp_threads=int(omp_threads or num_envs)
         )
         with PokemonRed.counter_lock:
             PokemonRed.c_env_counter.value += num_envs
