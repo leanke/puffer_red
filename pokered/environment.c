@@ -70,7 +70,7 @@ void c_reset(PokemonRedEnv *env) {
   env->terminals[0] = 0;
   env->step_count = env->frame_count = 0;
   env->score = 0.0f;
-  env->prev_action = MGBA_ACTION_NOOP;
+  env->prev_action = GB_ACTION_NOOP;
   env->prev_event_sum = calc_event_sum(&env->emu, NULL, false);
   env->prev_party_hp_frac = party_hp_fraction(&env->emu);
   env->game_mode = detect_game_mode(&env->emu);
@@ -140,13 +140,13 @@ void c_step(PokemonRedEnv *env) {
   }
 }
 
-void c_render(PokemonRedEnv *env) { mgba_render_frame(&env->emu); }
+void c_render(PokemonRedEnv *env) { gb_render_frame(&env->emu); }
 
 void c_close(PokemonRedEnv *env) {
   if (!env)
     return;
 
-  mgba_destroy_renderer(&env->emu);
+  gb_destroy_renderer(&env->emu);
 
   if (env->emu.gb) {
     gambatte_destroy(env->emu.gb);

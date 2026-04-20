@@ -139,7 +139,7 @@ typedef struct {
 
 typedef struct {
   Log log;
-  mGBA emu;
+  Emulator emu;
   GameState gstate;
 
   float *observations;
@@ -174,7 +174,7 @@ void update_observations(PokemonRedEnv *env);
 void update_core_state(PokemonRedEnv *env);
 
 int calc_level_sum(CoreState *core);
-int calc_event_sum(mGBA *emu, uint8_t *prev_events, bool verbose);
+int calc_event_sum(Emulator *emu, uint8_t *prev_events, bool verbose);
 float calculate_rewards(PokemonRedEnv *env);
 
 void allocate(PokemonRedEnv *env);
@@ -191,10 +191,10 @@ static inline uint32_t coord_index(uint8_t map, uint8_t x, uint8_t y) {
   return (uint32_t)map * (MAX_X * MAX_Y) + cx * MAX_Y + cy;
 }
 static inline bool is_directional_action(int action) {
-  return action >= MGBA_ACTION_RIGHT && action <= MGBA_ACTION_DOWN;
+  return action >= GB_ACTION_RIGHT && action <= GB_ACTION_DOWN;
 }
 
-static inline uint8_t detect_game_mode(mGBA *emu) {
+static inline uint8_t detect_game_mode(Emulator *emu) {
   if (read_mem(emu, BATTLE_FLAG_ADDR) != 0)
     return GAME_MODE_BATTLE;
   return GAME_MODE_GENERAL;

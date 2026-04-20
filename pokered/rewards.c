@@ -7,13 +7,13 @@ int calc_level_sum(CoreState *core) {
   return sum;
 }
 
-int calc_event_sum(mGBA *emu, uint8_t *prev_events, bool verbose) {
+int calc_event_sum(Emulator *emu, uint8_t *prev_events, bool verbose) {
   int sum = 0;
   for (size_t i = 0; i < EVENT_COUNT; ++i) {
     uint8_t value = read_mem(emu, EVENT_LIST[i].address);
     uint8_t completed = (value >> EVENT_LIST[i].bit) & 1;
     if (completed) {
-      if (verbose && prev_events && !prev_events[i])
+      if (prev_events && !prev_events[i])
         printf("Event completed: %s\n", EVENT_LIST[i].name);
       sum++;
     }
@@ -26,7 +26,7 @@ int calc_event_sum(mGBA *emu, uint8_t *prev_events, bool verbose) {
 static float compute_battle_signal(PokemonRedEnv *env) {
   BattleState *curr = &env->gstate.battle;
   BattleState *prev = &env->gstate.prev_battle;
-  mGBA *emu = &env->emu;
+  Emulator *emu = &env->emu;
   float signal = 0.0f;
 
   float curr_php = party_hp_fraction(emu);

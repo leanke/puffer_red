@@ -77,7 +77,7 @@ static inline uint16_t party_slot_base(uint8_t slot) {
 	return (uint16_t)(PKMN1_BASE + (slot * PKMN_STRUCT_SIZE));
 }
 
-static inline uint32_t read_uint24(mGBA *emu, uint16_t addr) {
+static inline uint32_t read_uint24(Emulator *emu, uint16_t addr) {
 	if (!emu)
 		return 0;
 	uint32_t b0 = read_mem(emu, addr);
@@ -86,7 +86,7 @@ static inline uint32_t read_uint24(mGBA *emu, uint16_t addr) {
 	return b0 | (b1 << 8) | (b2 << 16);
 }
 
-static inline void read_party_pokemon_at(mGBA *emu, uint16_t base, PartyPokemon *out) {
+static inline void read_party_pokemon_at(Emulator *emu, uint16_t base, PartyPokemon *out) {
 	if (!emu || !out)
 		return;
 	out->species = read_mem(emu, base + PKMN_SPECIES_OFFSET);
@@ -121,7 +121,7 @@ static inline void read_party_pokemon_at(mGBA *emu, uint16_t base, PartyPokemon 
 	out->special = read_uint16(emu, base + PKMN_SPECIAL_OFFSET);
 }
 
-static inline bool read_party_pokemon(mGBA *emu, uint8_t slot, PartyPokemon *out) {
+static inline bool read_party_pokemon(Emulator *emu, uint8_t slot, PartyPokemon *out) {
 	if (!emu || !out)
 		return false;
 	uint8_t party_count = read_mem(emu, PKMN_PARTY_COUNT_ADDR);
@@ -131,7 +131,7 @@ static inline bool read_party_pokemon(mGBA *emu, uint8_t slot, PartyPokemon *out
 	return true;
 }
 
-static inline uint8_t read_party(mGBA *emu, PartyPokemon *out, size_t max_slots) {
+static inline uint8_t read_party(Emulator *emu, PartyPokemon *out, size_t max_slots) {
 	if (!emu || !out || max_slots == 0)
 		return 0;
 	uint8_t party_count = read_mem(emu, PKMN_PARTY_COUNT_ADDR);

@@ -21,6 +21,11 @@
 #include <cstdlib>
 #include <cstring>
 
+/* ── Stubs for libretro-only symbols referenced by libgambatte ─────────── */
+/* cartridge.cpp declares this extern; normally libretro.cpp provides it.
+ * We don't use rumble, so provide a no-op. */
+void cartridge_set_rumble(unsigned /*active*/) {}
+
 /* ── Concrete InputGetter used by every instance ───────────────────────── */
 
 class SimpleInput : public gambatte::InputGetter {
@@ -70,7 +75,7 @@ int gambatte_load(gambatte_handle gb, const void *romdata,
 }
 
 void gambatte_reset(gambatte_handle gb) {
-    if (gb) as_state(gb)->gb.reset(0);  /* 0 = default sample rate */
+    if (gb) as_state(gb)->gb.reset();
 }
 
 void gambatte_run_frame(gambatte_handle gb, uint32_t *videoBuf) {
@@ -96,16 +101,47 @@ void gambatte_set_input(gambatte_handle gb, unsigned buttons) {
     if (gb) as_state(gb)->input.buttons_ = buttons;
 }
 
-/* ── Memory access ─────────────────────────────────────────────────────── */
+/* ── Memory access (via __LIBRETRO__ bank pointers) ────────────────────── */
+/*
+ * gambatte-libretro exposes direct memory bank pointers when built with
+ * -D__LIBRETRO__.  We use those instead of cpuRead/cpuWrite (which don't
+ * exist in the public API).  This covers the full Game Boy address space
+ * that Pokemon Red's game code touches (all in 0xC000–0xDFFF WRAM).
+ */
 
 uint8_t gambatte_read_mem(gambatte_handle gb, uint16_t addr) {
     if (!gb) return 0;
-    return as_state(gb)->gb.cpuRead(addr);
+    gambatte::GB &g = as_state(gb)->gb;
+
+    if (addr >= 0xC000 && addr <= 0xCFFF)
+        return static_cast<uint8_t *>(g.rambank0_ptr())[addr - 0xC000];
+    if (addr >= 0xD000 && addr <= 0xDFFF)
+        return static_cast<uint8_t *>(g.rambank1_ptr())[addr - 0xD000];
+    if (addr >= 0xFF80 && addr <= 0xFFFE)
+        return static_cast<uint8_t *>(g.zeropage_ptr())[addr - 0xFF80];
+    if (addr >= 0xFE00 && addr <= 0xFE9F)
+        return static_cast<uint8_t *>(g.oamram_ptr())[addr - 0xFE00];
+    if (addr >= 0x8000 && addr <= 0x9FFF)
+        return static_cast<uint8_t *>(g.vram_ptr())[addr - 0x8000];
+    if (addr <= 0x3FFF)
+        return static_cast<uint8_t *>(g.rombank0_ptr())[addr];
+    if (addr >= 0x4000 && addr <= 0x7FFF)
+        return static_cast<uint8_t *>(g.rombank1_ptr())[addr - 0x4000];
+
+    return 0xFF; /* I/O registers — not reachable via bank pointers */
 }
 
 void gambatte_write_mem(gambatte_handle gb, uint16_t addr, uint8_t val) {
     if (!gb) return;
-    as_state(gb)->gb.cpuWrite(addr, val);
+    gambatte::GB &g = as_state(gb)->gb;
+
+    if (addr >= 0xC000 && addr <= 0xCFFF)
+        static_cast<uint8_t *>(g.rambank0_ptr())[addr - 0xC000] = val;
+    else if (addr >= 0xD000 && addr <= 0xDFFF)
+        static_cast<uint8_t *>(g.rambank1_ptr())[addr - 0xD000] = val;
+    else if (addr >= 0xFF80 && addr <= 0xFFFE)
+        static_cast<uint8_t *>(g.zeropage_ptr())[addr - 0xFF80] = val;
+    /* Writes to ROM/VRAM/OAM/IO silently ignored — game only writes WRAM */
 }
 
 /* ── Save-state ────────────────────────────────────────────────────────── */

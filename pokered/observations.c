@@ -9,7 +9,7 @@ void update_observations(PokemonRedEnv *env) {
   const color_t *vbuf = env->emu.video_buffer;
   float *obs = env->observations;
   CoreState *core = &env->gstate.core;
-  mGBA *emu = &env->emu;
+  Emulator *emu = &env->emu;
 
   for (int sy = 0; sy < SCALED_HEIGHT; sy++) {
     for (int sx = 0; sx < SCALED_WIDTH; sx++) {
@@ -137,7 +137,7 @@ void update_observations(PokemonRedEnv *env) {
 
 void update_core_state(PokemonRedEnv *env) {
   CoreState *core = &env->gstate.core;
-  mGBA *emu = &env->emu;
+  Emulator *emu = &env->emu;
 
   core->x = read_mem(emu, PKMN_X_ADDR);
   core->y = read_mem(emu, PKMN_Y_ADDR);

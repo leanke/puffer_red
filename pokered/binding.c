@@ -60,7 +60,7 @@ static int my_init(Env *env, PyObject *args, PyObject *kwargs) {
   }
   fclose(rom_file);
 
-  mgba_init_core(&env->emu, rom_path);
+  gb_init_core(&env->emu, rom_path);
 
   env->episode_visits = (uint8_t *)calloc(VISITED_COORDS_SIZE, sizeof(uint8_t));
   env->exploration_heatmap =
@@ -68,7 +68,7 @@ static int my_init(Env *env, PyObject *args, PyObject *kwargs) {
   env->unique_coords_count = 0;
   env->prev_events = (uint8_t *)calloc(EVENT_COUNT, sizeof(uint8_t));
   memset(env->prev_events, 0, EVENT_COUNT);
-  env->prev_action = MGBA_ACTION_NOOP;
+  env->prev_action = GB_ACTION_NOOP;
 
   PyObject *decay_obj = PyDict_GetItemString(kwargs, "heatmap_decay");
   if (decay_obj && decay_obj != Py_None) {

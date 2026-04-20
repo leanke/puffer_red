@@ -188,6 +188,12 @@ def configure_gambatte_extension(c_ext):
     # Add the C++ wrapper source
     c_ext.sources.append("gambatte/gambatte_c.cpp")
 
+    # Required defines for gambatte-libretro memory bank pointer API
+    c_ext.define_macros = getattr(c_ext, "define_macros", []) + [
+        ("__LIBRETRO__", "1"),
+        ("HAVE_CSTDINT", "1"),
+    ]
+
     # Link against Gambatte/SDL2 - use pkg-config for SDL flags when available
     try:
         sdl_cflags = (
@@ -276,4 +282,5 @@ setup(
     },
     include_dirs=[numpy.get_include()],
     python_requires=">=3.9",
+    define_macros=[("__LIBRETRO__", "1"), ("HAVE_CSTDINT", "1")],
 )

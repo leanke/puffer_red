@@ -1,17 +1,18 @@
 # Pokémon Red Reinforcement Learning
 
-This repository contains code and resources for reinforcement learning experiments using the Pokémon Red game environment. It includes environment files and a minimal PufferLib and mGBA setup to facilitate easy experimentation and development.
+This repository contains code and resources for reinforcement learning experiments using the Pokémon Red game environment. It includes environment files and a minimal PufferLib and Gambatte setup to facilitate easy experimentation and development.
 
 ## Installation
 
 ### Prerequisites
 - Python 3.9+
 - CUDA toolkit (optional, for GPU acceleration)
-- mGBA library (`libmgba`) installed system-wide
+- Gambatte library (`libgambatte`) installed locally or system-wide
 
-### Install mGBA (Ubuntu/Debian)
+### Install Gambatte
+
 ```bash
-sudo apt-get install libmgba-dev
+make install-deps
 ```
 
 ### Install the package
@@ -41,12 +42,18 @@ pokemon_red_rl/
 │   └── extensions/         # C/CUDA extensions for fast GAE computation
 │       ├── pufferlib.cpp   # CPU implementation
 │       └── cuda/           # CUDA implementation
-├── pokered/                # mGBA Python bindings for Pokémon Red
+├── pokered/                # Gambatte Python bindings for Pokémon Red
 │   ├── binding.c           # C Python extension
 │   ├── pokered.py          # Python wrapper (PokemonRed env)
 │   ├── torch.py            # PyTorch policy (CNN + LSTM)
 │   ├── pokered.h           # C environment logic (rewards, state)
-│   └── includes/           # Header files (battle, events, party, mgba)
+│   └── includes/           # Header files (battle, events, party)
+├── gambatte/               # Gambatte emulator abstraction layer
+│   ├── gambatte_wrapper.h  # Core init, state save/load, SDL rendering
+│   ├── gambatte_c.h        # C API for libgambatte
+│   ├── gambatte_c.cpp      # C++ wrapper implementation
+│   ├── optim.h             # Performance macros
+│   └── env_binding.h       # Generic Python ↔ C binding
 ├── config/                 # Training configurations
 │   ├── default.ini         # Default hyperparameters
 │   └── pokered.ini         # Pokemon Red overrides + sweep config
@@ -57,6 +64,7 @@ pokemon_red_rl/
 ## Usage
 
 ### Training
+```bash
 ```bash
 # Train using the default configuration
 python -m pufferlib.pufferl train pokered

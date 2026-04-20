@@ -33,11 +33,11 @@ static inline bool is_battle_active(const BattleState *b) {
   return b->in_battle == 1 || b->in_battle == 2;
 }
 
-static inline uint16_t read_big_endian_16(mGBA *emu, uint16_t addr) {
+static inline uint16_t read_big_endian_16(Emulator *emu, uint16_t addr) {
   return (uint16_t)(read_mem(emu, addr) << 8) | read_mem(emu, addr + 1);
 }
 
-static inline void update_battle_state(BattleState *battle, mGBA *emu) {
+static inline void update_battle_state(BattleState *battle, Emulator *emu) {
   battle->in_battle = (int8_t)read_mem(emu, BATTLE_FLAG_ADDR);
   battle->battle_type = read_mem(emu, BATTLE_TYPE_ADDR);
   battle->is_gym_battle = read_mem(emu, GYM_LEADER_NO_ADDR) != 0;
@@ -57,15 +57,15 @@ static inline bool battle_just_ended(const BattleState *curr,
   return !is_battle_active(curr) && is_battle_active(prev);
 }
 
-static inline bool battle_was_lost(mGBA *emu) {
+static inline bool battle_was_lost(Emulator *emu) {
   return read_mem(emu, BATTLE_RESULT_ADDR) == 1;
 }
 
-static inline bool battle_was_fled(mGBA *emu) {
+static inline bool battle_was_fled(Emulator *emu) {
   return read_mem(emu, BATTLE_RESULT_ADDR) == 2;
 }
 
-static inline float party_hp_fraction(mGBA *emu) {
+static inline float party_hp_fraction(Emulator *emu) {
   uint8_t count = read_mem(emu, PARTY_COUNT_ADDR);
   if (count == 0 || count > 6) return 1.0f;
 

@@ -1,14 +1,13 @@
 /*
- * gambatte_wrapper.h — Drop-in replacement for mgba_wrapper.h.
+ * gambatte_wrapper.h — Gambatte emulator wrapper.
  *
- * Provides the same public API surface that game modules (pokered, template)
- * expect:
+ * Provides the public API surface that game modules (pokered, template) expect:
  *
- *   Types:   mGBA (struct), MGBAKey, MGBAAction, color_t
+ *   Types:   Emulator (struct), GBKey, GBAction, color_t
  *   Funcs:   read_mem, write_mem, read_bcd, read_uint16, write_uint16, ...
  *            action_to_key, set_keys
- *            mgba_init_core, initial_load_state, c_save_state_file,
- *            c_load_state_file, mgba_render_frame, mgba_destroy_renderer
+ *            gb_init_core, initial_load_state, c_save_state_file,
+ *            c_load_state_file, gb_render_frame, gb_destroy_renderer
  *   Macros:  GB_KEY_*, GB_ACTION_*, STEP_N_FRAMES, STEP_ACTION_FRAMES
  *
  * Internally everything is routed through the thin C API in gambatte_c.h
@@ -44,7 +43,7 @@ typedef uint32_t color_t;
 #define GB_SCREEN_HEIGHT  144
 #define GB_VIDEO_PITCH    256   /* Gambatte uses a 256-wide stride */
 
-/* ── Main emulator struct (named mGBA for minimal game-code churn) ────── */
+/* ── Main emulator struct ──────────────────────────────────────────────── */
 
 typedef struct {
   gambatte_handle   gb;          /* opaque pointer to GBState (C++ side) */
@@ -55,7 +54,7 @@ typedef struct {
   int32_t           press_frames;
   bool              render_enabled;
   bool              uses_shared_rom;
-  /* SDL rendering (same layout as old mGBA struct) */
+  /* SDL rendering */
   SDL_Window       *window;
   SDL_Renderer     *renderer;
   SDL_Texture      *texture;
@@ -64,7 +63,7 @@ typedef struct {
   int               video_height;
   bool              renderer_initialized;
   bool              sdl_registered;
-} mGBA;
+} Emulator;
 
 /* ── Performance helpers (shared ROM, branch hints, …) ─────────────────── */
 #include "optim.h"
@@ -72,75 +71,54 @@ typedef struct {
 /* ── Key / action enums (identical bitmask layout to Gambatte's input) ── */
 
 typedef enum {
-  MGBA_KEY_A      = (1 << 0),
-  MGBA_KEY_B      = (1 << 1),
-  MGBA_KEY_SELECT = (1 << 2),
-  MGBA_KEY_START  = (1 << 3),
-  MGBA_KEY_RIGHT  = (1 << 4),
-  MGBA_KEY_LEFT   = (1 << 5),
-  MGBA_KEY_UP     = (1 << 6),
-  MGBA_KEY_DOWN   = (1 << 7),
-} MGBAKey;
+  GB_KEY_A      = (1 << 0),
+  GB_KEY_B      = (1 << 1),
+  GB_KEY_SELECT = (1 << 2),
+  GB_KEY_START  = (1 << 3),
+  GB_KEY_RIGHT  = (1 << 4),
+  GB_KEY_LEFT   = (1 << 5),
+  GB_KEY_UP     = (1 << 6),
+  GB_KEY_DOWN   = (1 << 7),
+} GBKey;
 
 typedef enum {
-  MGBA_ACTION_NOOP = 0,
-  MGBA_ACTION_A,
-  MGBA_ACTION_B,
-  MGBA_ACTION_SELECT,
-  MGBA_ACTION_START,
-  MGBA_ACTION_RIGHT,
-  MGBA_ACTION_LEFT,
-  MGBA_ACTION_UP,
-  MGBA_ACTION_DOWN,
-  MGBA_ACTION_COUNT
-} MGBAAction;
-
-/* GB_* aliases for game-module compatibility */
-#define GB_KEY_A       MGBA_KEY_A
-#define GB_KEY_B       MGBA_KEY_B
-#define GB_KEY_SELECT  MGBA_KEY_SELECT
-#define GB_KEY_START   MGBA_KEY_START
-#define GB_KEY_RIGHT   MGBA_KEY_RIGHT
-#define GB_KEY_LEFT    MGBA_KEY_LEFT
-#define GB_KEY_UP      MGBA_KEY_UP
-#define GB_KEY_DOWN    MGBA_KEY_DOWN
-
-#define GB_ACTION_NOOP    MGBA_ACTION_NOOP
-#define GB_ACTION_A       MGBA_ACTION_A
-#define GB_ACTION_B       MGBA_ACTION_B
-#define GB_ACTION_SELECT  MGBA_ACTION_SELECT
-#define GB_ACTION_START   MGBA_ACTION_START
-#define GB_ACTION_RIGHT   MGBA_ACTION_RIGHT
-#define GB_ACTION_LEFT    MGBA_ACTION_LEFT
-#define GB_ACTION_UP      MGBA_ACTION_UP
-#define GB_ACTION_DOWN    MGBA_ACTION_DOWN
-#define GB_ACTION_COUNT   MGBA_ACTION_COUNT
+  GB_ACTION_NOOP = 0,
+  GB_ACTION_A,
+  GB_ACTION_B,
+  GB_ACTION_SELECT,
+  GB_ACTION_START,
+  GB_ACTION_RIGHT,
+  GB_ACTION_LEFT,
+  GB_ACTION_UP,
+  GB_ACTION_DOWN,
+  GB_ACTION_COUNT
+} GBAction;
 
 /* ── Forward declarations ──────────────────────────────────────────────── */
 
-static void mgba_init_core(mGBA *env, const char *rom_path);
-static void initial_load_state(mGBA *env, const char *state_path);
-static bool c_save_state_file(mGBA *env, const char *path);
-static bool c_load_state_file(mGBA *env, const char *path);
+static void gb_init_core(Emulator *env, const char *rom_path);
+static void initial_load_state(Emulator *env, const char *state_path);
+static bool c_save_state_file(Emulator *env, const char *path);
+static bool c_load_state_file(Emulator *env, const char *path);
 
-/* ── Inline helpers (same signatures as the old mGBA ones) ─────────────── */
+/* ── Inline helpers ────────────────────────────────────────────────────── */
 
 static inline uint32_t action_to_key(int action) {
-  if (action <= 0 || action >= MGBA_ACTION_COUNT)
+  if (action <= 0 || action >= GB_ACTION_COUNT)
     return 0;
   return (1 << (action - 1));
 }
 
-static inline void set_keys(mGBA *env, uint32_t keys) {
+static inline void set_keys(Emulator *env, uint32_t keys) {
   if (env && env->gb)
     gambatte_set_input(env->gb, keys & 0xFF);
 }
 
-static inline uint8_t read_mem(mGBA *env, uint16_t addr) {
+static inline uint8_t read_mem(Emulator *env, uint16_t addr) {
   return (env && env->gb) ? gambatte_read_mem(env->gb, addr) : 0;
 }
 
-static inline uint32_t read_bcd(mGBA *env, uint16_t addr) {
+static inline uint32_t read_bcd(Emulator *env, uint16_t addr) {
   uint8_t h = read_mem(env, addr);
   uint8_t m = read_mem(env, addr + 1);
   uint8_t l = read_mem(env, addr + 2);
@@ -148,18 +126,18 @@ static inline uint32_t read_bcd(mGBA *env, uint16_t addr) {
          ((m & 0xF) * 100) + ((l >> 4) * 10) + (l & 0xF);
 }
 
-static inline uint16_t read_uint16(mGBA *env, uint16_t addr) {
+static inline uint16_t read_uint16(Emulator *env, uint16_t addr) {
   uint8_t low  = read_mem(env, addr);
   uint8_t high = read_mem(env, addr + 1);
   return (uint16_t)(low | (high << 8));
 }
 
-static inline void write_mem(mGBA *env, uint16_t addr, uint8_t value) {
+static inline void write_mem(Emulator *env, uint16_t addr, uint8_t value) {
   if (env && env->gb)
     gambatte_write_mem(env->gb, addr, value);
 }
 
-static inline void write_bcd(mGBA *env, uint16_t addr, uint32_t value) {
+static inline void write_bcd(Emulator *env, uint16_t addr, uint32_t value) {
   uint8_t h = ((value / 100000) << 4) | ((value / 10000) % 10);
   uint8_t m = (((value / 1000) % 10) << 4) | ((value / 100) % 10);
   uint8_t l = (((value / 10) % 10) << 4) | (value % 10);
@@ -168,27 +146,27 @@ static inline void write_bcd(mGBA *env, uint16_t addr, uint32_t value) {
   write_mem(env, addr + 2, l);
 }
 
-static inline void write_uint16(mGBA *env, uint16_t addr, uint16_t value) {
+static inline void write_uint16(Emulator *env, uint16_t addr, uint16_t value) {
   write_mem(env, addr, (uint8_t)(value & 0xFF));
   write_mem(env, addr + 1, (uint8_t)(value >> 8));
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- *  SDL rendering pipeline (reused almost verbatim from mgba_wrapper.h)
+ *  SDL rendering pipeline
  * ══════════════════════════════════════════════════════════════════════════ */
 
 typedef struct RenderRegistryNode {
   uint32_t window_id;
-  mGBA *env;
+  Emulator *env;
   struct RenderRegistryNode *next;
 } RenderRegistryNode;
 
 static RenderRegistryNode *g_render_registry = NULL;
 static int g_sdl_video_users = 0;
 
-static void mgba_destroy_renderer(mGBA *env);
+static void gb_destroy_renderer(Emulator *env);
 
-static bool mgba_acquire_sdl_video(void) {
+static bool gb_acquire_sdl_video(void) {
   if (g_sdl_video_users == 0) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
       fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
@@ -200,7 +178,7 @@ static bool mgba_acquire_sdl_video(void) {
   return true;
 }
 
-static void mgba_release_sdl_video(void) {
+static void gb_release_sdl_video(void) {
   if (g_sdl_video_users == 0)
     return;
   g_sdl_video_users--;
@@ -210,7 +188,7 @@ static void mgba_release_sdl_video(void) {
   }
 }
 
-static void mgba_register_window(mGBA *env) {
+static void gb_register_window(Emulator *env) {
   if (!env || env->window_id == 0)
     return;
   RenderRegistryNode *node =
@@ -223,7 +201,7 @@ static void mgba_register_window(mGBA *env) {
   g_render_registry = node;
 }
 
-static void mgba_unregister_window(uint32_t window_id) {
+static void gb_unregister_window(uint32_t window_id) {
   RenderRegistryNode **curr = &g_render_registry;
   while (*curr) {
     if ((*curr)->window_id == window_id) {
@@ -236,7 +214,7 @@ static void mgba_unregister_window(uint32_t window_id) {
   }
 }
 
-static mGBA *mgba_lookup_env(uint32_t window_id) {
+static Emulator *gb_lookup_env(uint32_t window_id) {
   RenderRegistryNode *node = g_render_registry;
   while (node) {
     if (node->window_id == window_id)
@@ -246,7 +224,7 @@ static mGBA *mgba_lookup_env(uint32_t window_id) {
   return NULL;
 }
 
-static SDL_Rect mgba_calculate_dest_rect(const mGBA *env) {
+static SDL_Rect gb_calculate_dest_rect(const Emulator *env) {
   SDL_Rect rect = {0, 0, 0, 0};
   if (!env || !env->window || env->video_width <= 0 || env->video_height <= 0)
     return rect;
@@ -277,13 +255,13 @@ static SDL_Rect mgba_calculate_dest_rect(const mGBA *env) {
   return rect;
 }
 
-static bool mgba_ensure_renderer(mGBA *env) {
+static bool gb_ensure_renderer(Emulator *env) {
   if (!env || !env->render_enabled)
     return false;
   if (env->renderer_initialized && env->window && env->renderer && env->texture)
     return true;
 
-  if (!mgba_acquire_sdl_video())
+  if (!gb_acquire_sdl_video())
     return false;
   env->sdl_registered = true;
 
@@ -297,7 +275,7 @@ static bool mgba_ensure_renderer(mGBA *env) {
       SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
   if (!env->window) {
     fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
-    mgba_destroy_renderer(env);
+    gb_destroy_renderer(env);
     return false;
   }
 
@@ -307,7 +285,7 @@ static bool mgba_ensure_renderer(mGBA *env) {
     env->renderer = SDL_CreateRenderer(env->window, -1, SDL_RENDERER_SOFTWARE);
   if (!env->renderer) {
     fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
-    mgba_destroy_renderer(env);
+    gb_destroy_renderer(env);
     return false;
   }
 
@@ -316,44 +294,44 @@ static bool mgba_ensure_renderer(mGBA *env) {
       SDL_TEXTUREACCESS_STREAMING, width, height);
   if (!env->texture) {
     fprintf(stderr, "SDL_CreateTexture failed: %s\n", SDL_GetError());
-    mgba_destroy_renderer(env);
+    gb_destroy_renderer(env);
     return false;
   }
 
   env->video_width  = width;
   env->video_height = height;
   env->window_id    = SDL_GetWindowID(env->window);
-  mgba_register_window(env);
+  gb_register_window(env);
   env->renderer_initialized = true;
   SDL_ShowWindow(env->window);
   return true;
 }
 
-static void mgba_destroy_renderer(mGBA *env) {
+static void gb_destroy_renderer(Emulator *env) {
   if (!env) return;
   if (env->texture)  { SDL_DestroyTexture(env->texture);   env->texture  = NULL; }
   if (env->renderer) { SDL_DestroyRenderer(env->renderer); env->renderer = NULL; }
   if (env->window)   { SDL_DestroyWindow(env->window);     env->window   = NULL; }
   if (env->window_id) {
-    mgba_unregister_window(env->window_id);
+    gb_unregister_window(env->window_id);
     env->window_id = 0;
   }
   if (env->sdl_registered) {
-    mgba_release_sdl_video();
+    gb_release_sdl_video();
     env->sdl_registered = false;
   }
   env->renderer_initialized = false;
 }
 
-static void mgba_dispatch_events(void) {
+static void gb_dispatch_events(void) {
   SDL_Event event;
   while (SDL_PollEvent(&event)) {
     if (event.type == SDL_QUIT) {
       while (g_render_registry) {
-        mGBA *target = g_render_registry->env;
+        Emulator *target = g_render_registry->env;
         if (target) {
           target->render_enabled = false;
-          mgba_destroy_renderer(target);
+          gb_destroy_renderer(target);
         } else {
           RenderRegistryNode *orphan = g_render_registry;
           g_render_registry = orphan->next;
@@ -363,24 +341,24 @@ static void mgba_dispatch_events(void) {
       break;
     }
     if (event.type == SDL_WINDOWEVENT) {
-      mGBA *target = mgba_lookup_env(event.window.windowID);
+      Emulator *target = gb_lookup_env(event.window.windowID);
       if (!target) continue;
       if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
         fprintf(stderr, "Rendering disabled after window close (env %p).\n",
                 (void *)target);
         target->render_enabled = false;
-        mgba_destroy_renderer(target);
+        gb_destroy_renderer(target);
       }
     }
   }
 }
 
-static void mgba_render_frame(mGBA *env) {
+static void gb_render_frame(Emulator *env) {
   if (!env || !env->render_enabled || !env->video_buffer)
     return;
 
-  mgba_dispatch_events();
-  if (!mgba_ensure_renderer(env))
+  gb_dispatch_events();
+  if (!gb_ensure_renderer(env))
     return;
 
   /*
@@ -403,17 +381,17 @@ static void mgba_render_frame(mGBA *env) {
 
   SDL_SetRenderDrawColor(env->renderer, 0, 0, 0, 255);
   SDL_RenderClear(env->renderer);
-  SDL_Rect dest = mgba_calculate_dest_rect(env);
+  SDL_Rect dest = gb_calculate_dest_rect(env);
   SDL_RenderCopy(env->renderer, env->texture, NULL,
                  dest.w > 0 && dest.h > 0 ? &dest : NULL);
   SDL_RenderPresent(env->renderer);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- *  Core init / state load / save  (replaces mGBA-specific implementations)
+ *  Core init / state load / save
  * ══════════════════════════════════════════════════════════════════════════ */
 
-static void mgba_init_core(mGBA *env, const char *rom_path) {
+static void gb_init_core(Emulator *env, const char *rom_path) {
   if (!env) return;
 
   env->uses_shared_rom = false;
@@ -489,17 +467,17 @@ static void mgba_init_core(mGBA *env, const char *rom_path) {
   strncpy(env->rom_path, rom_path, sizeof(env->rom_path) - 1);
 }
 
-static bool c_save_state_file(mGBA *env, const char *path) {
+static bool c_save_state_file(Emulator *env, const char *path) {
   if (!env || !env->gb || !path) return false;
   return gambatte_save_state_file(env->gb, path);
 }
 
-static bool c_load_state_file(mGBA *env, const char *path) {
+static bool c_load_state_file(Emulator *env, const char *path) {
   if (!env || !env->gb || !path) return false;
   return gambatte_load_state_file(env->gb, path);
 }
 
-static void initial_load_state(mGBA *env, const char *state_path) {
+static void initial_load_state(Emulator *env, const char *state_path) {
   if (!env || !env->gb || !state_path) return;
   if (!gambatte_load_state_file(env->gb, state_path)) {
     fprintf(stderr, "Warning: Failed to load state file: %s\n", state_path);

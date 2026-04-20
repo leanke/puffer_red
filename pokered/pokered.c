@@ -6,9 +6,11 @@
 
 static bool agent_view = false;
 
-static int read_keyboard_action(bool *quit_requested, bool *toggle_view) {
+static int read_keyboard_action(bool *quit_requested, bool *toggle_view,
+                                bool *save_requested) {
   *quit_requested = false;
   *toggle_view = false;
+  *save_requested = false;
 
   SDL_PumpEvents();
 
@@ -19,35 +21,37 @@ static int read_keyboard_action(bool *quit_requested, bool *toggle_view) {
   while (SDL_PeepEvents(&evt, 1, SDL_GETEVENT, SDL_KEYDOWN, SDL_KEYDOWN) > 0) {
     if (evt.key.keysym.scancode == SDL_SCANCODE_TAB && !evt.key.repeat)
       *toggle_view = true;
+    if (evt.key.keysym.scancode == SDL_SCANCODE_S && !evt.key.repeat)
+      *save_requested = true;
   }
 
   const Uint8 *state = SDL_GetKeyboardState(NULL);
   if (!state)
-    return MGBA_ACTION_NOOP;
+    return GB_ACTION_NOOP;
 
   if (state[SDL_SCANCODE_ESCAPE]) {
     *quit_requested = true;
-    return MGBA_ACTION_NOOP;
+    return GB_ACTION_NOOP;
   }
   if (state[SDL_SCANCODE_RIGHT])
-    return MGBA_ACTION_RIGHT;
+    return GB_ACTION_RIGHT;
   if (state[SDL_SCANCODE_LEFT])
-    return MGBA_ACTION_LEFT;
+    return GB_ACTION_LEFT;
   if (state[SDL_SCANCODE_UP])
-    return MGBA_ACTION_UP;
+    return GB_ACTION_UP;
   if (state[SDL_SCANCODE_DOWN])
-    return MGBA_ACTION_DOWN;
+    return GB_ACTION_DOWN;
   if (state[SDL_SCANCODE_Z] || state[SDL_SCANCODE_SPACE])
-    return MGBA_ACTION_A;
+    return GB_ACTION_A;
   if (state[SDL_SCANCODE_X])
-    return MGBA_ACTION_B;
+    return GB_ACTION_B;
   if (state[SDL_SCANCODE_RETURN])
-    return MGBA_ACTION_START;
+    return GB_ACTION_START;
   if (state[SDL_SCANCODE_BACKSPACE] || state[SDL_SCANCODE_RSHIFT] ||
       state[SDL_SCANCODE_LSHIFT])
-    return MGBA_ACTION_SELECT;
+    return GB_ACTION_SELECT;
 
-  return MGBA_ACTION_NOOP;
+  return GB_ACTION_NOOP;
 }
 
 static void render_agent_view(PokemonRedEnv *env) {
@@ -236,7 +240,7 @@ static int init_env(PokemonRedEnv *env, const char *state_path) {
   }
   fclose(rom_file);
 
-  mgba_init_core(&env->emu, env->emu.rom_path);
+  gb_init_core(&env->emu, env->emu.rom_path);
   if (!env->emu.gb) {
     printf("Failed to initialize Gambatte core\n");
     return -1;
@@ -253,7 +257,7 @@ static int init_env(PokemonRedEnv *env, const char *state_path) {
 
 int main(int argc, char **argv) {
   const char *state_path =
-      (argc > 1) ? argv[1] : "./pokered/states/new_start.ss1";
+      (argc > 1) ? argv[1] : "./pokered/states/bulba_start";
 
   PokemonRedEnv env = {0};
   if (init_env(&env, state_path) != 0)
@@ -263,17 +267,25 @@ int main(int argc, char **argv) {
   c_render(&env);
 
   printf("Controls: Arrow keys=Move, Z/Space=A, X=B, Enter=Start, "
-         "Shift=Select, Tab=Agent view, Esc=Quit\n");
+         "Shift=Select, Tab=Agent view, S=Save state, Esc=Quit\n");
 
   bool running = true;
   while (running) {
     bool quit_requested = false;
     bool toggle_view = false;
-    env.actions[0] = read_keyboard_action(&quit_requested, &toggle_view);
+    bool save_requested = false;
+    env.actions[0] =
+        read_keyboard_action(&quit_requested, &toggle_view, &save_requested);
     if (quit_requested)
       break;
     if (toggle_view)
       agent_view = !agent_view;
+    if (save_requested) {
+      if (c_save_state_file(&env.emu, "play_save_state"))
+        printf("State saved to play_save_state\n");
+      else
+        printf("Failed to save state\n");
+    }
 
     c_step(&env);
 

@@ -52,8 +52,8 @@ endif
 
 # CFLAGS/LDFLAGS used only for the standalone play target
 CFLAGS := -DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION -DPLATFORM_DESKTOP -I$(NUMPY_INCLUDE) -I$(GAMBATTE_DIR) $(GAMBATTE_CFLAGS) -Wno-alloc-size-larger-than -Wno-implicit-function-declaration -fmax-errors=3 $(OPT_FLAGS) -fopenmp
-CXXFLAGS := -std=c++17 -I$(GAMBATTE_DIR) $(GAMBATTE_CFLAGS) $(OPT_FLAGS)
-LDFLAGS := -fwrapv -Bsymbolic-functions $(LINK_OPT_FLAGS) $(GAMBATTE_LDFLAGS) -fopenmp
+CXXFLAGS := -std=c++17 -D__LIBRETRO__ -DHAVE_CSTDINT -I$(GAMBATTE_DIR) $(GAMBATTE_CFLAGS) $(OPT_FLAGS)
+LDFLAGS := -fwrapv -Bsymbolic-functions $(LINK_OPT_FLAGS) $(GAMBATTE_LDFLAGS) -fopenmp -lm
 
 .PHONY: all clean help pokered play
 
@@ -87,46 +87,25 @@ install-deps:
 	@echo "Installing Gambatte (gambatte-libretro)..."
 	@echo ""
 	@echo "Step 1: Clone the repository"
+	@if [ -d /tmp/gambatte-libretro ]; then rm -rf /tmp/gambatte-libretro; fi
 	git clone https://github.com/libretro/gambatte-libretro.git /tmp/gambatte-libretro
 	@echo ""
 	@echo "Step 2: Build libgambatte as a static library"
 	cd /tmp/gambatte-libretro/libgambatte && \
-		$(CXX) -std=c++17 -O3 -D__LIBRETRO__ \
+		$(CXX) -std=c++17 -O3 -fPIC \
+			-D__LIBRETRO__ -DHAVE_CSTDINT \
 			-Iinclude -Isrc \
-			-c $$(find src -name '*.cpp') && \
+			-I../common \
+			-Ilibretro -Ilibretro-common/include \
+			-c $$(find src -name '*.cpp') \
+			   libretro/gambatte_log.c && \
 		ar rcs libgambatte.a *.o
 	@echo ""
 	@echo "Step 3: Install to $(GAMBATTE_LIB_DIR)"
 	mkdir -p $(GAMBATTE_LIB_DIR)/lib $(GAMBATTE_LIB_DIR)/include
 	cp /tmp/gambatte-libretro/libgambatte/libgambatte.a $(GAMBATTE_LIB_DIR)/lib/
 	cp /tmp/gambatte-libretro/libgambatte/include/*.h $(GAMBATTE_LIB_DIR)/include/
-	@echo ""
-	@echo "Step 4: Clean up"
-	rm -rf /tmp/gambatte-libretro
-	@echo ""
-	@echo "Gambatte installed to $(GAMBATTE_LIB_DIR)"
-	@echo "  Headers: $(GAMBATTE_LIB_DIR)/include/"
-	@echo "  Library: $(GAMBATTE_LIB_DIR)/lib/libgambatte.a"
-
-help:
-	@echo "Pokemon Red RL Makefile"
-	@echo ""
-	@echo "Usage:"
-	@echo "  make                 - Build pokered binding (release, optimized)"
-	@echo "  make clean           - Clean environment"
-	@echo "  make play            - Build standalone SDL player"
-	@echo "  make install-deps    - Install Gambatte
-	@echo "Step 2: Build libgambatte as a static library"
-	cd /tmp/gambatte-libretro/libgambatte && \
-		$(CXX) -std=c++17 -O3 -D__LIBRETRO__ \
-			-Iinclude -Isrc \
-			-c $$(find src -name '*.cpp') && \
-		ar rcs libgambatte.a *.o
-	@echo ""
-	@echo "Step 3: Install to $(GAMBATTE_LIB_DIR)"
-	mkdir -p $(GAMBATTE_LIB_DIR)/lib $(GAMBATTE_LIB_DIR)/include
-	cp /tmp/gambatte-libretro/libgambatte/libgambatte.a $(GAMBATTE_LIB_DIR)/lib/
-	cp /tmp/gambatte-libretro/libgambatte/include/*.h $(GAMBATTE_LIB_DIR)/include/
+	cp /tmp/gambatte-libretro/common/*.h $(GAMBATTE_LIB_DIR)/include/
 	@echo ""
 	@echo "Step 4: Clean up"
 	rm -rf /tmp/gambatte-libretro

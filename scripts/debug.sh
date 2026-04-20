@@ -1,5 +1,5 @@
 #!/bin/bash
-# Debug script for mGBA environment
+# Debug script for Gambatte environment
 # Usage: ./debug.sh [test|train]
 #
 # For GDB debugging, remember to:
