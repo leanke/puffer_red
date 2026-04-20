@@ -1,7 +1,7 @@
 #ifndef POKERED_PARTY_H
 #define POKERED_PARTY_H
 
-#include "../../mgba/mgba_wrapper.h"
+#include "../../gambatte/gambatte_wrapper.h"
 #include <stddef.h>
 #include <stdint.h>
 

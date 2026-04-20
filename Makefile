@@ -1,11 +1,14 @@
 SHELL := /bin/bash
 PYTHON := python3
 CC ?= gcc
+CXX ?= g++
 NUMPY_INCLUDE := $(shell $(PYTHON) -c "import numpy; print(numpy.get_include())")
 POKERED_DIR := pokered
 POKERED_PLAY_BIN := pokered_play
 POKERED_PLAY_SRC := $(POKERED_DIR)/pokered.c
 POKERED_IMPL_SRCS := $(POKERED_DIR)/environment.c $(POKERED_DIR)/rewards.c $(POKERED_DIR)/observations.c
+GAMBATTE_CPP_SRC := gambatte/gambatte_c.cpp
+GAMBATTE_CPP_OBJ := gambatte/gambatte_c.o
 BINDING_SO := $(shell $(PYTHON) -c "import sysconfig; print('$(POKERED_DIR)/binding' + sysconfig.get_config_var('EXT_SUFFIX'))")
 SDL2_CFLAGS := $(shell pkg-config --cflags sdl2 2>/dev/null || sdl2-config --cflags 2>/dev/null)
 SDL2_LIBS := $(shell pkg-config --libs sdl2 2>/dev/null || sdl2-config --libs 2>/dev/null || echo -lSDL2)
@@ -26,27 +29,31 @@ else
 	LINK_OPT_FLAGS := -O3 -flto
 endif
 
-# Shared mGBA abstraction layer
-MGBA_DIR := mgba
+# Gambatte abstraction layer
+GAMBATTE_DIR := gambatte
 
-# Local mGBA fork (set to use custom build, or leave empty for system libmgba)
-# Build with: cd ~/loft/puffer/mgba && ./build.sh install
-MGBA_LIB_DIR ?= /user/include/mgba
-# $(HOME)/loft/puffer/mgba/install
+# Local Gambatte build (set to use custom build, or leave empty for system libgambatte)
+# Build with: cd ~/loft/puffer/gambatte && make && make install
+GAMBATTE_LIB_DIR ?= $(HOME)/loft/puffer/gambatte/install
 
-ifneq ($(wildcard $(MGBA_LIB_DIR)/lib/libmgba.so),)
-    MGBA_CFLAGS := -I$(MGBA_LIB_DIR)/include -I$(MGBA_LIB_DIR)/include/mgba
-    MGBA_LDFLAGS := -L$(MGBA_LIB_DIR)/lib -Wl,-rpath,$(MGBA_LIB_DIR)/lib -lmgba
-    $(info Using local mGBA fork: $(MGBA_LIB_DIR))
+ifneq ($(wildcard $(GAMBATTE_LIB_DIR)/lib/libgambatte.a),)
+    GAMBATTE_CFLAGS := -I$(GAMBATTE_LIB_DIR)/include
+    GAMBATTE_LDFLAGS := -L$(GAMBATTE_LIB_DIR)/lib -lgambatte -lstdc++
+    $(info Using local Gambatte: $(GAMBATTE_LIB_DIR))
+else ifneq ($(wildcard $(GAMBATTE_LIB_DIR)/lib/libgambatte.so),)
+    GAMBATTE_CFLAGS := -I$(GAMBATTE_LIB_DIR)/include
+    GAMBATTE_LDFLAGS := -L$(GAMBATTE_LIB_DIR)/lib -Wl,-rpath,$(GAMBATTE_LIB_DIR)/lib -lgambatte -lstdc++
+    $(info Using local Gambatte (shared): $(GAMBATTE_LIB_DIR))
 else
-    MGBA_CFLAGS :=
-    MGBA_LDFLAGS := -lmgba
-    $(info Using system mGBA)
+    GAMBATTE_CFLAGS :=
+    GAMBATTE_LDFLAGS := -lgambatte -lstdc++
+    $(info Using system Gambatte)
 endif
 
 # CFLAGS/LDFLAGS used only for the standalone play target
-CFLAGS := -DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION -DPLATFORM_DESKTOP -I$(NUMPY_INCLUDE) -I$(MGBA_DIR) $(MGBA_CFLAGS) -Wno-alloc-size-larger-than -Wno-implicit-function-declaration -fmax-errors=3 $(OPT_FLAGS) -DENABLE_VFS -fopenmp
-LDFLAGS := -fwrapv -Bsymbolic-functions $(LINK_OPT_FLAGS) $(MGBA_LDFLAGS) -fopenmp
+CFLAGS := -DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION -DPLATFORM_DESKTOP -I$(NUMPY_INCLUDE) -I$(GAMBATTE_DIR) $(GAMBATTE_CFLAGS) -Wno-alloc-size-larger-than -Wno-implicit-function-declaration -fmax-errors=3 $(OPT_FLAGS) -fopenmp
+CXXFLAGS := -std=c++17 -I$(GAMBATTE_DIR) $(GAMBATTE_CFLAGS) $(OPT_FLAGS)
+LDFLAGS := -fwrapv -Bsymbolic-functions $(LINK_OPT_FLAGS) $(GAMBATTE_LDFLAGS) -fopenmp
 
 .PHONY: all clean help pokered play
 
@@ -56,13 +63,17 @@ pokered: $(BINDING_SO)
 
 play: $(POKERED_PLAY_BIN)
 
-$(BINDING_SO): $(POKERED_DIR)/binding.c $(POKERED_IMPL_SRCS) $(POKERED_DIR)/pokered.h $(MGBA_DIR)/mgba_wrapper.h $(MGBA_DIR)/optim.h $(MGBA_DIR)/env_binding.h
+$(GAMBATTE_CPP_OBJ): $(GAMBATTE_CPP_SRC) $(GAMBATTE_DIR)/gambatte_c.h
+	@echo "Compiling Gambatte C++ wrapper..."
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BINDING_SO): $(POKERED_DIR)/binding.c $(POKERED_IMPL_SRCS) $(POKERED_DIR)/pokered.h $(GAMBATTE_DIR)/gambatte_wrapper.h $(GAMBATTE_DIR)/optim.h $(GAMBATTE_DIR)/env_binding.h $(GAMBATTE_DIR)/gambatte_c.h
 	@echo "Compiling Pokemon Red binding..."
 	DEBUG=$(DEBUG) $(PYTHON) setup.py build_c --inplace
 
-$(POKERED_PLAY_BIN): $(POKERED_PLAY_SRC) $(POKERED_IMPL_SRCS) $(POKERED_DIR)/pokered.h
+$(POKERED_PLAY_BIN): $(POKERED_PLAY_SRC) $(POKERED_IMPL_SRCS) $(POKERED_DIR)/pokered.h $(GAMBATTE_CPP_OBJ)
 	@echo "Compiling standalone Pokemon Red player..."
-	$(CC) $(CFLAGS) $(SDL2_CFLAGS) -I$(POKERED_DIR) -I$(POKERED_DIR)/includes -I$(MGBA_DIR) $< $(POKERED_IMPL_SRCS) -o $@ $(LDFLAGS) $(SDL2_LIBS)
+	$(CC) $(CFLAGS) $(SDL2_CFLAGS) -I$(POKERED_DIR) -I$(POKERED_DIR)/includes -I$(GAMBATTE_DIR) $< $(POKERED_IMPL_SRCS) $(GAMBATTE_CPP_OBJ) -o $@ $(LDFLAGS) $(SDL2_LIBS)
 
 clean:
 	@echo "Cleaning..."
@@ -70,16 +81,32 @@ clean:
 	@find $(POKERED_DIR) -name "build" -type d -exec rm -rf {} + 2>/dev/null || true
 	@rm -rf build
 	@rm -f $(POKERED_PLAY_BIN)
+	@rm -f $(GAMBATTE_CPP_OBJ)
 
 install-deps:
-	@echo "Cloning and installing mgba..."
-	git clone https://github.com/mgba-emu/mgba.git
-	cd mgba
-	git checkout 0.10.2
-	mkdir build && cd build
-	cmake ..
-	make
-	sudo make install
+	@echo "Installing Gambatte (gambatte-libretro)..."
+	@echo ""
+	@echo "Step 1: Clone the repository"
+	git clone https://github.com/libretro/gambatte-libretro.git /tmp/gambatte-libretro
+	@echo ""
+	@echo "Step 2: Build libgambatte as a static library"
+	cd /tmp/gambatte-libretro/libgambatte && \
+		$(CXX) -std=c++17 -O3 -D__LIBRETRO__ \
+			-Iinclude -Isrc \
+			-c $$(find src -name '*.cpp') && \
+		ar rcs libgambatte.a *.o
+	@echo ""
+	@echo "Step 3: Install to $(GAMBATTE_LIB_DIR)"
+	mkdir -p $(GAMBATTE_LIB_DIR)/lib $(GAMBATTE_LIB_DIR)/include
+	cp /tmp/gambatte-libretro/libgambatte/libgambatte.a $(GAMBATTE_LIB_DIR)/lib/
+	cp /tmp/gambatte-libretro/libgambatte/include/*.h $(GAMBATTE_LIB_DIR)/include/
+	@echo ""
+	@echo "Step 4: Clean up"
+	rm -rf /tmp/gambatte-libretro
+	@echo ""
+	@echo "Gambatte installed to $(GAMBATTE_LIB_DIR)"
+	@echo "  Headers: $(GAMBATTE_LIB_DIR)/include/"
+	@echo "  Library: $(GAMBATTE_LIB_DIR)/lib/libgambatte.a"
 
 help:
 	@echo "Pokemon Red RL Makefile"
@@ -87,8 +114,35 @@ help:
 	@echo "Usage:"
 	@echo "  make                 - Build pokered binding (release, optimized)"
 	@echo "  make clean           - Clean environment"
-	@echo "  make pokered_play    - Build standalone SDL player"
-	@echo "  make install-deps    - Install mGBA development libraries"
+	@echo "  make play            - Build standalone SDL player"
+	@echo "  make install-deps    - Install Gambatte
+	@echo "Step 2: Build libgambatte as a static library"
+	cd /tmp/gambatte-libretro/libgambatte && \
+		$(CXX) -std=c++17 -O3 -D__LIBRETRO__ \
+			-Iinclude -Isrc \
+			-c $$(find src -name '*.cpp') && \
+		ar rcs libgambatte.a *.o
+	@echo ""
+	@echo "Step 3: Install to $(GAMBATTE_LIB_DIR)"
+	mkdir -p $(GAMBATTE_LIB_DIR)/lib $(GAMBATTE_LIB_DIR)/include
+	cp /tmp/gambatte-libretro/libgambatte/libgambatte.a $(GAMBATTE_LIB_DIR)/lib/
+	cp /tmp/gambatte-libretro/libgambatte/include/*.h $(GAMBATTE_LIB_DIR)/include/
+	@echo ""
+	@echo "Step 4: Clean up"
+	rm -rf /tmp/gambatte-libretro
+	@echo ""
+	@echo "Gambatte installed to $(GAMBATTE_LIB_DIR)"
+	@echo "  Headers: $(GAMBATTE_LIB_DIR)/include/"
+	@echo "  Library: $(GAMBATTE_LIB_DIR)/lib/libgambatte.a"
+
+help:
+	@echo "Pokemon Red RL Makefile"
+	@echo ""
+	@echo "Usage:"
+	@echo "  make                 - Build pokered binding (release, optimized)"
+	@echo "  make clean           - Clean environment"
+	@echo "  make play            - Build standalone SDL player"
+	@echo "  make install-deps    - Install Gambatte development libraries"
 	@echo "  make test            - Run quick test"
 	@echo "  make bench           - Run benchmark"
 	@echo ""

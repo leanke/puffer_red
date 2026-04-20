@@ -237,8 +237,8 @@ static int init_env(PokemonRedEnv *env, const char *state_path) {
   fclose(rom_file);
 
   mgba_init_core(&env->emu, env->emu.rom_path);
-  if (!env->emu.core) {
-    printf("Failed to initialize mGBA core\n");
+  if (!env->emu.gb) {
+    printf("Failed to initialize Gambatte core\n");
     return -1;
   }
 

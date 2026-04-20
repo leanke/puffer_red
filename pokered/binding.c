@@ -1,4 +1,4 @@
-#include "../mgba/mgba_wrapper.h"
+#include "../gambatte/gambatte_wrapper.h"
 #include "pokered.h"
 #include <Python.h>
 
@@ -10,7 +10,7 @@ static PyObject *vec_get_positions(PyObject *self, PyObject *args);
   {"vec_get_positions", vec_get_positions, METH_VARARGS,                       \
    "Get positions of all envs"}
 
-#include "../mgba/env_binding.h"
+#include "../gambatte/env_binding.h"
 
 static PyObject *vec_get_positions(PyObject *self, PyObject *args) {
   VecEnv *vec = unpack_vecenv(args);
@@ -62,14 +62,6 @@ static int my_init(Env *env, PyObject *args, PyObject *kwargs) {
 
   mgba_init_core(&env->emu, rom_path);
 
-  // Tell mGBA PPU to skip rendering all but 1 frame per action step
-  if (env->emu.core && env->emu.frame_skip > 1) {
-    char fs_str[16];
-    snprintf(fs_str, sizeof(fs_str), "%d", env->emu.frame_skip - 1);
-    mCoreConfigSetValue(&env->emu.core->config, "frameskip", fs_str);
-    env->emu.core->reloadConfigOption(env->emu.core, "frameskip", NULL);
-  }
-
   env->episode_visits = (uint8_t *)calloc(VISITED_COORDS_SIZE, sizeof(uint8_t));
   env->exploration_heatmap =
       (uint16_t *)calloc(VISITED_COORDS_SIZE, sizeof(uint16_t));
@@ -85,8 +77,8 @@ static int my_init(Env *env, PyObject *args, PyObject *kwargs) {
     env->heatmap_decay = 0.0f;
   }
   env->heatmap_decay_interval = env->max_episode_length / 1;
-  if (!env->emu.core) {
-    PyErr_SetString(PyExc_RuntimeError, "Failed to initialize mGBA core");
+  if (!env->emu.gb) {
+    PyErr_SetString(PyExc_RuntimeError, "Failed to initialize Gambatte core");
     return -1;
   }
   initial_load_state(&env->emu, env->emu.state_path);

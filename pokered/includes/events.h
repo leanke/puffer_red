@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include "../../mgba/mgba_wrapper.h"
+#include "../../gambatte/gambatte_wrapper.h"
 
 typedef struct {
     uint16_t address;

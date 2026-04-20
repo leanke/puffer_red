@@ -52,7 +52,7 @@ void add_log(PokemonRedEnv *env) {
 }
 
 void c_reset(PokemonRedEnv *env) {
-  if (!env || !env->emu.core)
+  if (!env || !env->emu.gb)
     return;
   if (env->full_reset) {
     initial_load_state(&env->emu, env->emu.state_path);
@@ -81,11 +81,11 @@ void c_reset(PokemonRedEnv *env) {
   }
 
   for (int i = 0; i < 4; i++)
-    env->emu.core->runFrame(env->emu.core);
+    gambatte_run_frame(env->emu.gb, env->emu.video_buffer);
 }
 
 void c_step(PokemonRedEnv *env) {
-  if (!env || !env->emu.core)
+  if (!env || !env->emu.gb)
     return;
   env->rewards[0] = 0;
   env->terminals[0] = 0;
@@ -112,7 +112,7 @@ void c_step(PokemonRedEnv *env) {
   int press = env->emu.press_frames > 0 ? env->emu.press_frames : 8;
   env->prev_action = env->actions[0];
   uint32_t action_key = action_to_key(env->actions[0]);
-  STEP_ACTION_FRAMES(env->emu.core, action_key, press, skip);
+  STEP_ACTION_FRAMES(env->emu.gb, action_key, env->emu.video_buffer, press, skip);
   env->frame_count += skip;
 
   float reward = calculate_rewards(env);
@@ -148,11 +148,9 @@ void c_close(PokemonRedEnv *env) {
 
   mgba_destroy_renderer(&env->emu);
 
-  if (env->emu.core) {
-    env->emu.core->setVideoBuffer(env->emu.core, NULL, 0);
-    mCoreConfigDeinit(&env->emu.core->config);
-    env->emu.core->deinit(env->emu.core);
-    env->emu.core = NULL;
+  if (env->emu.gb) {
+    gambatte_destroy(env->emu.gb);
+    env->emu.gb = NULL;
   }
 
   if (env->emu.uses_shared_rom) {

@@ -126,7 +126,7 @@ class TorchBuildExt(cpp_extension.BuildExtension):
         super().run()
 
 
-INCLUDE = [numpy.get_include(), "mgba"]
+INCLUDE = [numpy.get_include(), "gambatte"]
 extension_kwargs = dict(
     include_dirs=INCLUDE,
     extra_compile_args=extra_compile_args,
@@ -155,33 +155,40 @@ for path in c_extension_paths:
 c_extension_paths = [os.path.join(*path.split("/")[:-1]) for path in c_extension_paths]
 
 
-def configure_mgba_extension(c_ext):
-    """Configure a C extension that uses the shared mGBA abstraction layer."""
-    print(f"Configuring {c_ext.name} with mGBA library")
+def configure_gambatte_extension(c_ext):
+    """Configure a C extension that uses the Gambatte abstraction layer."""
+    print(f"Configuring {c_ext.name} with Gambatte library")
     c_ext.extra_objects = []
 
-    # Check for local mGBA fork first, fall back to system libmgba
-    mgba_lib_dir = os.environ.get(
-        "MGBA_LIB_DIR", os.path.expanduser("~/loft/puffer/mgba/install")
+    # Check for local Gambatte build first, fall back to system libgambatte
+    gambatte_lib_dir = os.environ.get(
+        "GAMBATTE_LIB_DIR", os.path.expanduser("~/loft/puffer/gambatte/install")
     )
 
-    if os.path.isfile(os.path.join(mgba_lib_dir, "lib", "libmgba.so")):
-        print(f"  Using local mGBA fork: {mgba_lib_dir}")
-        c_ext.include_dirs.append(os.path.join(mgba_lib_dir, "include"))
-        c_ext.include_dirs.append(os.path.join(mgba_lib_dir, "include", "mgba"))
+    if os.path.isfile(os.path.join(gambatte_lib_dir, "lib", "libgambatte.a")):
+        print(f"  Using local Gambatte: {gambatte_lib_dir}")
+        c_ext.include_dirs.append(os.path.join(gambatte_lib_dir, "include"))
         c_ext.library_dirs = getattr(c_ext, "library_dirs", []) + [
-            os.path.join(mgba_lib_dir, "lib")
+            os.path.join(gambatte_lib_dir, "lib")
+        ]
+    elif os.path.isfile(os.path.join(gambatte_lib_dir, "lib", "libgambatte.so")):
+        print(f"  Using local Gambatte (shared): {gambatte_lib_dir}")
+        c_ext.include_dirs.append(os.path.join(gambatte_lib_dir, "include"))
+        c_ext.library_dirs = getattr(c_ext, "library_dirs", []) + [
+            os.path.join(gambatte_lib_dir, "lib")
         ]
         c_ext.runtime_library_dirs = getattr(c_ext, "runtime_library_dirs", []) + [
-            os.path.join(mgba_lib_dir, "lib")
+            os.path.join(gambatte_lib_dir, "lib")
         ]
     else:
-        print(f"  Using system mGBA (no local fork at {mgba_lib_dir})")
-        c_ext.include_dirs.append("/usr/include/mgba")
+        print(f"  Using system Gambatte (no local build at {gambatte_lib_dir})")
 
-    c_ext.include_dirs.append("mgba")
-    c_ext.extra_compile_args.append("-DENABLE_VFS")
-    # Link against mGBA/SDL2 - use pkg-config for SDL flags when available
+    c_ext.include_dirs.append("gambatte")
+
+    # Add the C++ wrapper source
+    c_ext.sources.append("gambatte/gambatte_c.cpp")
+
+    # Link against Gambatte/SDL2 - use pkg-config for SDL flags when available
     try:
         sdl_cflags = (
             subprocess.check_output(["pkg-config", "--cflags", "sdl2"], text=True)
@@ -198,16 +205,16 @@ def configure_mgba_extension(c_ext):
         sdl_libs = ["-lSDL2"]
 
     c_ext.extra_compile_args.extend(flag for flag in sdl_cflags if flag)
-    c_ext.extra_link_args.extend(["-lmgba"])
+    c_ext.extra_link_args.extend(["-lgambatte", "-lstdc++"])
     c_ext.extra_link_args.extend(flag for flag in sdl_libs if flag)
 
 
-# Game modules that use the mGBA abstraction layer
-MGBA_GAME_MODULES = ["pokered", "template"]
+# Game modules that use the Gambatte abstraction layer
+GAMBATTE_GAME_MODULES = ["pokered", "template"]
 
 for c_ext in c_extensions:
-    if any(name in c_ext.name for name in MGBA_GAME_MODULES):
-        configure_mgba_extension(c_ext)
+    if any(name in c_ext.name for name in GAMBATTE_GAME_MODULES):
+        configure_gambatte_extension(c_ext)
         # Add game-specific include dirs
         game_dir = c_ext.name.rsplit(".", 1)[0]
         c_ext.include_dirs.append(os.path.join(game_dir, "includes"))

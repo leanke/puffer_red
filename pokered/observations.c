@@ -19,7 +19,7 @@ void update_observations(PokemonRedEnv *env) {
       uint32_t gray_sum = 0;
       for (int dy = 0; dy < 2; dy++) {
         for (int dx = 0; dx < 2; dx++) {
-          int src_idx = (src_y + dy) * SCREEN_WIDTH + (src_x + dx);
+          int src_idx = (src_y + dy) * GB_VIDEO_PITCH + (src_x + dx);
           color_t pixel = vbuf[src_idx];
           uint32_t r = (pixel >> 16) & 0xFF;
           uint32_t g = (pixel >> 8) & 0xFF;

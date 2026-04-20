@@ -1,7 +1,7 @@
 #ifndef POKEMONREDENV_H
 #define POKEMONREDENV_H
 
-#include "../mgba/mgba_wrapper.h"
+#include "../gambatte/gambatte_wrapper.h"
 #include "./includes/battle.h"
 #include "./includes/events.h"
 
