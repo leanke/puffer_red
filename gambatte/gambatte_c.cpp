@@ -26,6 +26,9 @@
  * We don't use rumble, so provide a no-op. */
 void cartridge_set_rumble(unsigned /*active*/) {}
 
+/* Override gambatte_log.o from libgambatte.a to silence [Gambatte] stderr output. */
+extern "C" void gambatte_log(int, const char *, ...) {}
+
 /* ── Concrete InputGetter used by every instance ───────────────────────── */
 
 class SimpleInput : public gambatte::InputGetter {

@@ -25,6 +25,7 @@ DEBUG = os.getenv("DEBUG", "0") == "1"
 # Shared compile args for all platforms
 extra_compile_args = [
     "-DNPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION",
+    "-D_GNU_SOURCE",
     "-fopenmp",
 ]
 extra_link_args = ["-fwrapv", "-fopenmp"]

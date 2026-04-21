@@ -52,8 +52,10 @@ static float compute_battle_signal(PokemonRedEnv *env) {
   if (battle_just_ended(curr, prev)) {
     if (battle_was_lost(emu)) {
       signal -= 1.0f;
+      memset(env->episode_visits, 0, VISITED_COORDS_SIZE);
+      memset(env->chunk_episode_visits, 0, VISITED_CHUNKS_SIZE);
       if (env->verbose)
-        printf("Battle lost (blackout)\n");
+        printf("Battle lost (blackout) — episode visits cleared\n");
     } else if (battle_was_fled(emu)) {
       signal -= 0.1f;
       if (env->verbose)
@@ -87,23 +89,36 @@ static float compute_exploration_signal(PokemonRedEnv *env) {
   if (idx >= VISITED_COORDS_SIZE)
     return 0.0f;
 
+  float signal = 0.0f;
   uint16_t global_count = env->exploration_heatmap[idx];
-  uint8_t ep_count = env->episode_visits[idx];
 
-  // Increment both counters
   if (global_count < UINT16_MAX)
     env->exploration_heatmap[idx] = global_count + 1;
-  if (ep_count < UINT8_MAX)
-    env->episode_visits[idx] = ep_count + 1;
+  if (env->episode_visits[idx] < UINT8_MAX)
+    env->episode_visits[idx]++;
 
-  // Track unique coords (first global visit ever)
-  if (global_count == 0)
+  if (global_count == 0) {
     env->unique_coords_count++;
+    signal += EXPLORE_TILE_NOVEL;
+  }
 
-  // Dual-counter reward: global novelty × episode freshness
-  float global_factor = 0.10f / sqrtf(1.0f + (float)global_count);
-  float episode_factor = 0.25f / (1.0f + (float)ep_count);
-  return global_factor * episode_factor;
+  uint32_t cidx = chunk_index(core->map_n, core->x, core->y);
+  if (cidx < VISITED_CHUNKS_SIZE) {
+    uint16_t chunk_global = env->chunk_heatmap[cidx];
+    uint8_t chunk_ep = env->chunk_episode_visits[cidx];
+
+    if (chunk_global < UINT16_MAX)
+      env->chunk_heatmap[cidx] = chunk_global + 1;
+    if (chunk_ep < UINT8_MAX)
+      env->chunk_episode_visits[cidx] = chunk_ep + 1;
+
+    if (chunk_global == 0)
+      signal += EXPLORE_CHUNK_NOVEL;
+    else if (chunk_ep == 0)
+      signal += EXPLORE_CHUNK_EPFRESH;
+  }
+
+  return signal;
 }
 
 static float compute_events_signal(PokemonRedEnv *env) {

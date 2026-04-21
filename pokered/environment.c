@@ -16,6 +16,8 @@ void free_allocated(PokemonRedEnv *env) {
   free(env->truncations);
   free(env->episode_visits);
   free(env->exploration_heatmap);
+  free(env->chunk_heatmap);
+  free(env->chunk_episode_visits);
   free(env->prev_events);
 }
 
@@ -64,6 +66,7 @@ void c_reset(PokemonRedEnv *env) {
   env->gstate.prev_battle = env->gstate.battle;
   update_observations(env);
   memset(env->episode_visits, 0, VISITED_COORDS_SIZE);
+  memset(env->chunk_episode_visits, 0, VISITED_CHUNKS_SIZE);
   env->unique_coords_count = 0;
 
   env->rewards[0] = 0;
@@ -130,6 +133,10 @@ void c_step(PokemonRedEnv *env) {
     for (size_t i = 0; i < VISITED_COORDS_SIZE; i++) {
       env->exploration_heatmap[i] =
           (uint16_t)((float)env->exploration_heatmap[i] * keep);
+    }
+    for (size_t i = 0; i < VISITED_CHUNKS_SIZE; i++) {
+      env->chunk_heatmap[i] =
+          (uint16_t)((float)env->chunk_heatmap[i] * keep);
     }
   }
 

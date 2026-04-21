@@ -67,7 +67,7 @@
 #define BATTLE_TYPE_OLD_MAN     0x02
 
 #define WEIGHT_BATTLE      0.15f
-#define WEIGHT_EXPLORATION 1.00f
+#define WEIGHT_EXPLORATION 0.50f
 #define WEIGHT_EVENTS      0.30f
 #define WEIGHT_LEVELING    0.10f
 #define WEIGHT_MILESTONES  0.50f
@@ -76,6 +76,15 @@
 #define MAX_X 128
 #define MAX_Y 128
 #define VISITED_COORDS_SIZE (MAX_MAPS * MAX_X * MAX_Y)
+
+#define CHUNK_SIZE 4
+#define CHUNK_X (MAX_X / CHUNK_SIZE)
+#define CHUNK_Y (MAX_Y / CHUNK_SIZE)
+#define VISITED_CHUNKS_SIZE (MAX_MAPS * CHUNK_X * CHUNK_Y)
+
+#define EXPLORE_TILE_NOVEL   0.005f
+#define EXPLORE_CHUNK_NOVEL  0.05f
+#define EXPLORE_CHUNK_EPFRESH 0.02f
 
 typedef struct {
   float episode_length;
@@ -149,6 +158,8 @@ typedef struct {
   unsigned char *truncations;
   uint8_t *episode_visits;
   uint16_t *exploration_heatmap;
+  uint16_t *chunk_heatmap;
+  uint8_t *chunk_episode_visits;
   uint8_t *prev_events;
 
   EpisodeStats stats;
@@ -189,6 +200,12 @@ static inline uint32_t coord_index(uint8_t map, uint8_t x, uint8_t y) {
   uint32_t cx = x < MAX_X ? x : MAX_X - 1;
   uint32_t cy = y < MAX_Y ? y : MAX_Y - 1;
   return (uint32_t)map * (MAX_X * MAX_Y) + cx * MAX_Y + cy;
+}
+
+static inline uint32_t chunk_index(uint8_t map, uint8_t x, uint8_t y) {
+  uint32_t cx = (x < MAX_X ? x : MAX_X - 1) / CHUNK_SIZE;
+  uint32_t cy = (y < MAX_Y ? y : MAX_Y - 1) / CHUNK_SIZE;
+  return (uint32_t)map * (CHUNK_X * CHUNK_Y) + cx * CHUNK_Y + cy;
 }
 static inline bool is_directional_action(int action) {
   return action >= GB_ACTION_RIGHT && action <= GB_ACTION_DOWN;

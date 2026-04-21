@@ -264,11 +264,7 @@ typedef struct {
     int          num_envs;
     int          omp_threads;
     NumaTopology numa_topo;
-    int         *env_nodes;  /* NUMA node index for each env */
 } VecEnv;
-
-/* Per-OMP-thread flag: 1 once the thread has been pinned to its NUMA node. */
-static __thread int _numa_bound = 0;
 
 static VecEnv* unpack_vecenv(PyObject* args) {
     PyObject* handle_obj = PyTuple_GetItem(args, 0);
@@ -328,13 +324,6 @@ static PyObject* vec_init(PyObject* self, PyObject* args, PyObject* kwargs) {
     }
 
     numa_detect(&vec->numa_topo);
-    vec->env_nodes = (int*)calloc(num_envs, sizeof(int));
-    if (!vec->env_nodes) {
-        PyErr_SetString(PyExc_MemoryError, "Failed to allocate env_nodes");
-        free(vec->envs);
-        free(vec);
-        return NULL;
-    }
     if (vec->numa_topo.num_nodes > 1)
         fprintf(stderr, "[NUMA] %d nodes detected — distributing %d envs across nodes\n",
                 vec->numa_topo.num_nodes, num_envs);
@@ -429,15 +418,10 @@ static PyObject* vec_init(PyObject* self, PyObject* args, PyObject* kwargs) {
     }
 
     for (int i = 0; i < num_envs; i++) {
-        /* Distribute envs evenly across NUMA nodes (round-robin by index). */
         int node = (vec->numa_topo.num_nodes > 1)
             ? (i * vec->numa_topo.num_nodes / num_envs)
             : 0;
-        vec->env_nodes[i] = node;
 
-        /* Bias all allocations in this iteration toward the target node.
-         * This covers the Env struct, video buffer, heatmap, episode_visits,
-         * and any other heap memory allocated by my_init / gb_init_core. */
         if (vec->numa_topo.num_nodes > 1)
             numa_set_mem_policy(node);
 
@@ -545,12 +529,8 @@ static PyObject* vec_reset(PyObject* self, PyObject* args) {
 
     Py_BEGIN_ALLOW_THREADS
     omp_set_num_threads(threads);
-    #pragma omp parallel for schedule(static)
+    #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < num; i++) {
-        if (!_numa_bound && vec->numa_topo.num_nodes > 1) {
-            numa_bind_thread(&vec->numa_topo, vec->env_nodes[i]);
-            _numa_bound = 1;
-        }
         c_reset(envs[i]);
     }
     Py_END_ALLOW_THREADS
@@ -575,12 +555,8 @@ static PyObject* vec_step(PyObject* self, PyObject* arg) {
 
     Py_BEGIN_ALLOW_THREADS
     omp_set_num_threads(threads);
-    #pragma omp parallel for schedule(static)
+    #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < num; i++) {
-        if (!_numa_bound && vec->numa_topo.num_nodes > 1) {
-            numa_bind_thread(&vec->numa_topo, vec->env_nodes[i]);
-            _numa_bound = 1;
-        }
         c_step(envs[i]);
     }
     Py_END_ALLOW_THREADS
@@ -671,7 +647,6 @@ static PyObject* vec_close(PyObject* self, PyObject* args) {
         c_close(vec->envs[i]);
         free(vec->envs[i]);
     }
-    free(vec->env_nodes);
     free(vec->envs);
     free(vec);
     Py_RETURN_NONE;

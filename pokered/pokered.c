@@ -249,6 +249,10 @@ static int init_env(PokemonRedEnv *env, const char *state_path) {
   env->episode_visits = (uint8_t *)calloc(VISITED_COORDS_SIZE, sizeof(uint8_t));
   env->exploration_heatmap =
       (uint16_t *)calloc(VISITED_COORDS_SIZE, sizeof(uint16_t));
+  env->chunk_heatmap =
+      (uint16_t *)calloc(VISITED_CHUNKS_SIZE, sizeof(uint16_t));
+  env->chunk_episode_visits =
+      (uint8_t *)calloc(VISITED_CHUNKS_SIZE, sizeof(uint8_t));
   env->prev_events = (uint8_t *)calloc(EVENT_COUNT, sizeof(uint8_t));
   env->unique_coords_count = 0;
 
