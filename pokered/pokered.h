@@ -66,7 +66,7 @@
 #define VIRIDIAN_SCRIPT_ADDR    0xD5F4
 #define BATTLE_TYPE_OLD_MAN     0x02
 
-#define WEIGHT_BATTLE      0.02f
+#define WEIGHT_BATTLE      0.15f
 #define WEIGHT_EXPLORATION 1.00f
 #define WEIGHT_EVENTS      0.30f
 #define WEIGHT_LEVELING    0.10f

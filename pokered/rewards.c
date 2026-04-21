@@ -31,6 +31,11 @@ static float compute_battle_signal(PokemonRedEnv *env) {
 
   float curr_php = party_hp_fraction(emu);
 
+  // Penalize HP lost during active battle
+  float hp_loss = env->prev_party_hp_frac - curr_php;
+  if (hp_loss > 0.0f && is_battle_active(curr))
+    signal -= hp_loss * 0.5f;
+
   if (is_battle_active(curr) && is_battle_active(prev) &&
       curr->enemy_maxhp > 0) {
     if (prev->enemy_hp > curr->enemy_hp) {
@@ -46,6 +51,7 @@ static float compute_battle_signal(PokemonRedEnv *env) {
 
   if (battle_just_ended(curr, prev)) {
     if (battle_was_lost(emu)) {
+      signal -= 1.0f;
       if (env->verbose)
         printf("Battle lost (blackout)\n");
     } else if (battle_was_fled(emu)) {
@@ -60,7 +66,7 @@ static float compute_battle_signal(PokemonRedEnv *env) {
   }
 
   if (curr->run_attempts > prev->run_attempts)
-    signal -= 0.001f;
+    signal -= 0.02f;
 
   env->prev_party_hp_frac = curr_php;
   return signal;
@@ -102,7 +108,9 @@ static float compute_exploration_signal(PokemonRedEnv *env) {
 
 static float compute_events_signal(PokemonRedEnv *env) {
   int event_sum = calc_event_sum(&env->emu, env->prev_events, env->verbose);
-  float signal = (event_sum > env->prev_event_sum) ? 1.0f : 0.0f;
+  float signal = (event_sum > env->prev_event_sum)
+      ? (float)(event_sum - env->prev_event_sum)
+      : 0.0f;
   env->prev_event_sum = event_sum;
   return signal;
 }
@@ -112,10 +120,11 @@ static float compute_leveling_signal(PokemonRedEnv *env) {
   CoreState *prev = &env->gstate.prev_core;
   int level_sum = calc_level_sum(core);
   int prev_level_sum = calc_level_sum(prev);
-  if (level_sum > prev_level_sum && core->party_count == prev->party_count) {
+  int delta = level_sum - prev_level_sum;
+  if (delta > 0 && core->party_count == prev->party_count) {
     if (env->verbose)
       printf("You have leveled up! New level sum: %d\n", level_sum);
-    return 0.1f;
+    return (float)delta * 0.1f;
   }
   return 0.0f;
 }
@@ -136,8 +145,6 @@ static float compute_milestones_signal(PokemonRedEnv *env) {
       printf("You caught a new Pokemon! Party count: %d\n", core->party_count);
   }
 
-  if (signal > 1.0f)
-    signal = 1.0f;
   return signal;
 }
 
